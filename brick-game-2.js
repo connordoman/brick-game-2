@@ -18,13 +18,14 @@ const brickGame = function (p) {
     let brick;
 
     p.setup = () => {
+        p.frameRate(30);
         p.createCanvas(400, 400);
 
         // Game objects
-        ball = new Ball(p, p.width / 5, p.height / 4, 16);
+        ball = new Ball(p, p.width / 2, p.height / 2, 16);
         brick = new Brick(p, 200, 200);
 
-        ball.setVelocity(1, 1);
+        ball.setVelocity(new Vector(-1, 1));
     };
 
     p.draw = () => {
@@ -176,19 +177,13 @@ class Ball extends Circle {
     constructor(par, x, y, r) {
         super(new Point(x, y), r);
         this.par = par;
-        this.vx = 0;
-        this.vy = 0;
+        this.vel = new Vector(0, 0);
+        this.ts = 1;
     }
 
     update() {
-        this.pos.x += this.vx;
-        this.pos.y += this.vy;
-        if (this.pos.x - this.r + this.vx < 0 || this.pos.x + this.r + this.vx > this.par.width) {
-            this.setVelocity(-this.vx, this.vy);
-        }
-        if (this.pos.y - this.r + this.vy < 0 || this.pos.y + this.r + this.vy > this.par.height) {
-            this.setVelocity(this.vx, -this.vy);
-        }
+        this.pos.x += this.vel.x;
+        this.pos.y += this.vel.y;
     }
 
     draw() {
@@ -202,89 +197,29 @@ class Ball extends Circle {
         }
     }
 
-    setVelocity(vx, vy) {
-        this.vx = vx;
-        this.vy = vy;
+    setVelocity(vec) {
+        this.vel = new Vector(vec.x, vec.y);
     }
 
     collision(rect) {
 
         let colour = 'red';
 
-        let rectHypo = rect.p1.dist(new Point(rect.x, rect.y));
-
         let nearX = Math.max(rect.p1.x, Math.min(this.pos.x, rect.p2.x));
         let nearY = Math.max(rect.p1.y, Math.min(this.pos.y, rect.p2.y));
+        let dist = new Vector(Math.abs(this.pos.x - nearX), Math.abs(this.pos.y - nearY));
 
-        let corner = false;
-
-        if (this.pos.dist(new Point(rect.x, rect.y)) < this.r + rectHypo) {
-            corner = false;
-        } else if (this.pos.dist(new Point(nearX, nearY)) <= this.r) {
-            corner = true;
-            colour = 'green';
+        if (dist.magnitude <= this.r) {
+            console.log(dist.parity());
+            let normal = new Vector(-dist.y, dist.x).normalize().mult(dist.parity());
+            this.setVelocity(this.vel.bounce(normal));
         }
 
-        if (corner) {
-
-            // the long way
-            let corner = false;
-            let theta = Math.atan2(this.vy, this.vx);
-            let reflectVector = new Point(1, 1);
-            let piOver4 = Math.PI / 4;
-            if (this.pos.x < rect.p1.x && this.pos.y < rect.p1.y) {
-                // top left
-                if (theta == piOver4) {
-                    this.setVelocity(-this.vx, -this.vy);
-                } else if (theta < piOver4) {
-                    this.setVelocity(-this.vy, this.vx);
-                } else if (theta > piOver4) {
-                    this.setVelocity(this.vy, -this.vx);
-                }
-            } else if (this.pos.x > rect.p2.x && this.pos.y < rect.p1.y) {
-                // top right
-                if (theta == piOver4) {
-                    this.setVelocity(-this.vx, -this.vy);
-                } else if (theta < piOver4) {
-                    this.setVelocity(-this.vy, -this.vx);
-                } else if (theta > piOver4) {
-                    this.setVelocity(this.vy, this.vx);
-                }
-            } else if (this.pos.x < rect.p1.x && this.pos.y > rect.p2.y) {
-                // bottom left
-                if (theta == piOver4) {
-                    this.setVelocity(-this.vx, -this.vy);
-                } else if (theta < piOver4) {
-                    this.setVelocity(this.vy, -this.vx);
-                } else if (theta > piOver4) {
-                    this.setVelocity(-this.vy, this.vx);
-                }
-            } else if (this.pos.x > rect.p1.x && this.pos.y < rect.p2.y) {
-                // bottom right
-                if (theta == piOver4) {
-                    this.setVelocity(-this.vx, -this.vy);
-                } else if (theta < piOver4) {
-                    this.setVelocity(-this.vy, this.vx);
-                } else if (theta > piOver4) {
-                    this.setVelocity(this.vy, -this.vx);
-                }
-            }
-
-        } else if (!corner) {
-        }
-
-
-        /*if (collide) {
-            console.log('collision');
-            let c = -2 * (this.vx * nearX + this.vy * nearY) / (nearX * nearX + nearY * nearY);
-            this.setVelocity(this.vx + (c * nearX), this.vy + (c * nearY));
-        }*/
 
         if (DEBUG) {
             this.par.stroke(colour);
             this.par.line(this.pos.x, this.pos.y, nearX, nearY);
         }
-        return corner;
     }
 }
 
@@ -309,6 +244,67 @@ class Brick extends Rectangle {
             this.par.strokeWeight(2);
             this.par.point(this.x, this.y);
         }
+    }
+}
+
+class Vector {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    get magnitude() {
+        return Math.sqrt(this.x * this.x + this.y * this.y);
+    }
+
+    set magnitude(value) {
+        let dir = this.direction;
+        this.x = Math.cos(dir) * value;
+        this.y = Math.sin(dir) * value;
+    }
+
+    get direction() {
+        return Math.atan2(this.y, this.x);
+    }
+
+    set direction(angle) {
+        let mag = this.magnitude;
+        this.x = Math.cos(angle) * mag;
+        this.y = Math.sin(angle) * mag;
+    }
+
+
+    dot(a) {
+        return a.x * this.x + a.y * this.y;
+    }
+
+    add(a) {
+        return new Vector(a.x + this.x, a.y + this.y);
+    }
+
+    sub(a) {
+        return new Vector(this.x - a.x, this.y - a.y);
+    }
+
+    mult(scalar) {
+        return new Vector(this.x * scalar, this.y * scalar);
+    }
+
+    div(scalar) {
+        return new Vector(this.x / scalar, this.y / scalar);
+    }
+
+    normalize() {
+        return new Vector(this.x / this.magnitude, this.y / this.magnitude);
+    }
+
+    bounce(normal) {
+        let tmp = normal.mult(-2 * this.dot(normal));
+        return this.add(tmp);
+    }
+
+    parity() {
+        return (this.x * this.y) / Math.abs(this.x * this.y);
     }
 }
 
