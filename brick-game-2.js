@@ -18,19 +18,25 @@ const brickGame = function (p) {
 
     let ball;
     let brick;
-    let screen;
+    let brickSet;
 
     p.setup = () => {
         // p5 preparation
+        let res = scaleResolution(9 * GRID_SIZE, 16 * GRID_SIZE);
         p.frameRate(30);
-        p.createCanvas(400, 400);
+        let cnv = p.createCanvas(res.w, res.h);
+        cnv.parent('gamearea');
 
         // Game objects
         screen = new Rectangle(new Vector(0, 0), p.width, p.height);
         ball = new Ball(p, p.width / 2, p.height / 2, 8);
-        brick = new Brick(p, 20 * GRID_SIZE, 20 * GRID_SIZE);
+        //brick = new Brick(p, 20 * GRID_SIZE, 20 * GRID_SIZE);
+        brickSet = [];
+        for (let i = 0; i < 10; i++) {
+            brickSet.push(new Brick(p, (i * 2 * GRID_SIZE) + i, 0));
+        }
 
-        ball.setVelocity(new Vector(1, 1));
+        ball.setVelocity(new Vector(Math.PI, Math.random() * Math.PI * 2));
 
         paused = false;
     };
@@ -40,25 +46,26 @@ const brickGame = function (p) {
         p.rectMode(p.CENTER);
         p.ellipseMode(p.RADIUS);
 
-        // draw grid
-        p.stroke(128);
-        p.strokeWeight(1);
-        for (let i = 0; i < p.height / GRID_SIZE; i++) {
-            p.line(0, i * GRID_SIZE, p.width, i * GRID_SIZE);
-            for (let j = 0; j < p.width / GRID_SIZE; j++) {
-                p.line(j * GRID_SIZE, 0, j * GRID_SIZE, p.height);
-            }
+        if (DEBUG) {
+            drawGrid();
         }
-
 
         // update objects
         ball.update();
-        brick.update();
-        ball.collision(brick);
+        //brick.update();
+        //ball.collision(brick);
+        ball.screenCollide();
 
         // draw objects
         ball.draw();
-        brick.draw();
+        //brick.draw();
+        for (let i = 0; i < brickSet.length; i++) {
+            let br = brickSet[i];
+            if (!br.destroyed) {
+                br.destroyed = ball.collision(br);
+                br.draw();
+            }
+        }
     };
 
     p.keyTyped = () => {
@@ -70,6 +77,28 @@ const brickGame = function (p) {
             p.noLoop();
         } else if (!paused) {
             p.loop();
+        }
+    };
+
+    p.windowResized = () => {
+        let res = scaleResolution(9 * GRID_SIZE, 16 * GRID_SIZE);
+        p.resizeCanvas(res.w, res.h);
+    };
+
+    let scaleResolution = (unitsX, unitsY) => {
+        let scrRatio = p.windowWidth / p.windowHeight;
+        return scrRatio > unitsX / unitsY ? { w: unitsX * (p.windowHeight / unitsY), h: p.windowHeight } : { w: p.windowWidth, h: unitsY * (p.windowWidth / unitsX) };
+    };
+
+    let drawGrid = () => {
+        // draw grid
+        p.stroke(128);
+        p.strokeWeight(1);
+        for (let i = 0; i < p.height / GRID_SIZE; i++) {
+            p.line(0, i * GRID_SIZE, p.width, i * GRID_SIZE);
+            for (let j = 0; j < p.width / GRID_SIZE; j++) {
+                p.line(j * GRID_SIZE, 0, j * GRID_SIZE, p.height);
+            }
         }
     };
 }
@@ -155,6 +184,10 @@ class Rectangle {
         this.calculateData(p1, width, height);
     }
 
+    setPosition(pos) {
+        this.calculateData(pos, this.width, this.height);
+    }
+
     calculateData(p1, width, height) {
         this.p1 = p1;
         this.p2 = new Vector(p1.x + width, p1.y + height);
@@ -162,13 +195,15 @@ class Rectangle {
         this.height = height;
         this.x = p1.x + width / 2;
         this.y = p1.y + height / 2;
+        this.center = new Vector(this.x, this.y);
     }
 
     intersects(pt) {
-        if (pt.x > this.pos.x ||
-            pt.x < this.pos.x + this.width ||
-            pt.y > this.pos.y ||
-            pt.y < this.pos.y + this.height) {
+        console.log(`Checking intersection: ${pt.toString()}`);
+        if (pt.x > this.p1.x &&
+            pt.x < this.p2.x &&
+            pt.y > this.p1.y &&
+            pt.y < this.p2.y) {
             return true;
         } else {
             return false;
@@ -248,6 +283,7 @@ class Ball extends Circle {
         this.par = par;
         this.vel = new Vector(0, 0);
         this.ts = 1;
+        this.bounds = new Rectangle(this.pos, 2 * this.r, 8 * this.r);
     }
 
     update() {
@@ -256,6 +292,8 @@ class Ball extends Circle {
         if (this.par.millis() % 1000 < 20) {
             console.log(this.pos.toString());
         }
+
+        this.bounds.setPosition(this.pos);
     }
 
     draw() {
@@ -265,7 +303,9 @@ class Ball extends Circle {
 
         if (DEBUG) {
             this.par.stroke('red');
+            this.par.strokeWeight(2);
             this.par.point(this.pos.x, this.pos.y);
+            this.par.rect(this.bounds.p1.x, this.bounds.p1.y, this.bounds.width, this.bounds.height);
         }
     }
 
@@ -273,9 +313,20 @@ class Ball extends Circle {
         this.vel = new Vector(vec.x, vec.y);
     }
 
+    screenCollide() {
+        if (this.pos.x + this.r + this.vel.x >= this.par.width || this.pos.x - this.r + this.vel.x <= 0) {
+            this.vel.x *= -1;
+        }
+        if (this.pos.y + this.r + this.vel.y >= this.par.height || this.pos.y - this.r + this.vel.y <= 0) {
+            this.vel.y *= -1;
+        }
+    }
+
     collision(rect) {
 
         let colour = 'red';
+
+        let collide = false;
 
         let nearX = Math.max(rect.p1.x, Math.min(this.pos.x, rect.p2.x));
         let nearY = Math.max(rect.p1.y, Math.min(this.pos.y, rect.p2.y));
@@ -284,41 +335,40 @@ class Ball extends Circle {
         let radius = new Vector(this.pos.y - nearY, this.pos.x - nearX);
 
         if (dist.magnitude <= this.r) {
-            console.log(`Distance: ${radius.toString()}`);
 
             if (Math.abs(radius.y) === Math.abs(radius.x)) {
                 // 45 degrees
-                console.log('Collision at 45 degrees');
                 this.vel = this.vel.mult(-1);
+                collide = true;
             } else if (radius.y === 0) {
                 // top-bottom
-                console.log('Collision on horizontal plane');
                 this.setVelocity(new Vector(this.vel.x, -this.vel.y));
+                collide = true;
             } else if (radius.x === 0) {
                 // left-right
-                console.log('Collision on vertical plane');
                 this.setVelocity(new Vector(-this.vel.x, this.vel.y));
+                collide = true;
             } else {
                 // corners
-                console.log('Collision on corner');
                 let normal = new Vector(-dist.y, dist.x).normalize();
                 this.setVelocity(this.vel.bounce(normal));
-
+                collide = true;
             }
 
             let distToMove = this.r - radius.magnitude;
-            console.log(`Displacement needed: ${distToMove}`);
 
             let theta = this.pos.angle(radius);
             this.pos.x += Math.cos(theta) * distToMove;
             this.pos.y += Math.sin(theta) * distToMove;
         }
 
-
         if (DEBUG) {
             this.par.stroke(colour);
+            this.par.strokeWeight(1);
             this.par.line(this.pos.x, this.pos.y, nearX, nearY);
         }
+
+        return collide;
     }
 }
 
@@ -326,6 +376,7 @@ class Brick extends Rectangle {
     constructor(par, x, y) {
         super(new Vector(x, y), 32, 16);
         this.par = par;
+        this.destroyed = false;
     }
 
     update() {
@@ -334,6 +385,7 @@ class Brick extends Rectangle {
     }
 
     draw() {
+        this.par.strokeWeight(1);
         this.par.stroke(255);
         this.par.noFill();
         this.par.rect(this.x, this.y, this.width, this.height);
@@ -342,6 +394,34 @@ class Brick extends Rectangle {
             this.par.stroke('red');
             this.par.strokeWeight(2);
             this.par.point(this.x, this.y);
+        }
+    }
+}
+
+class BrickGroup {
+    constructor(num) {
+        this.bricks = new Array(num);
+    }
+
+    get size() {
+        return this.bricks.length;
+    }
+
+    add(brick) {
+        this.bricks.push(brick);
+    }
+
+    get(index) {
+        if (0 < index && index < this.bricks.length) {
+            return this.bricks[index];
+        }
+        return false;
+    }
+
+    remove(brick) {
+        let index = this.bricks.indexOf(brick);
+        if (index > -1) {
+            this.bricks.splice(index, 1);
         }
     }
 }
