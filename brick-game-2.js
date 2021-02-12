@@ -14,24 +14,31 @@ const brickGame = function (p) {
 
     const GRID_SIZE = 16;
 
+    let paused;
+
     let ball;
     let brick;
+    let screen;
 
     p.setup = () => {
+        // p5 preparation
         p.frameRate(30);
         p.createCanvas(400, 400);
 
         // Game objects
-        ball = new Ball(p, p.width / 2, p.height / 2, 16);
-        brick = new Brick(p, 200, 200);
+        screen = new Rectangle(new Vector(0, 0), p.width, p.height);
+        ball = new Ball(p, p.width / 2, p.height / 2, 8);
+        brick = new Brick(p, 20 * GRID_SIZE, 20 * GRID_SIZE);
 
-        ball.setVelocity(new Vector(-1, 1));
+        ball.setVelocity(new Vector(1, 1));
+
+        paused = false;
     };
 
     p.draw = () => {
         p.background(0);
         p.rectMode(p.CENTER);
-        p.ellipseMode(p.CENTER);
+        p.ellipseMode(p.RADIUS);
 
         // draw grid
         p.stroke(128);
@@ -56,28 +63,90 @@ const brickGame = function (p) {
 
     p.keyTyped = () => {
         if (p.key === ' ') {
+            paused = !paused;
+        }
+
+        if (paused) {
             p.noLoop();
+        } else if (!paused) {
+            p.loop();
         }
     };
 }
 
-
-class Point {
+class Vector {
     constructor(x, y) {
         this.x = x;
         this.y = y;
     }
 
-    setCoords(x, y) {
-        this.x = x;
-        this.y = y;
+    get magnitude() {
+        return Math.sqrt(this.x * this.x + this.y * this.y);
     }
 
-    dist(pt) {
-        let dx = this.x - pt.x;
-        let dy = this.y - pt.y;
+    set magnitude(value) {
+        let dir = this.direction;
+        this.x = Math.cos(dir) * value;
+        this.y = Math.sin(dir) * value;
+    }
+
+    get direction() {
+        return Math.atan2(this.y, this.x);
+    }
+
+    set direction(angle) {
+        let mag = this.magnitude;
+        this.x = Math.cos(angle) * mag;
+        this.y = Math.sin(angle) * mag;
+    }
+
+
+    dot(a) {
+        return a.x * this.x + a.y * this.y;
+    }
+
+    add(a) {
+        return new Vector(a.x + this.x, a.y + this.y);
+    }
+
+    sub(a) {
+        return new Vector(this.x - a.x, this.y - a.y);
+    }
+
+    mult(scalar) {
+        return new Vector(this.x * scalar, this.y * scalar);
+    }
+
+    div(scalar) {
+        return new Vector(this.x / scalar, this.y / scalar);
+    }
+
+    normalize() {
+        return new Vector(this.x / this.magnitude, this.y / this.magnitude);
+    }
+
+    bounce(normal) {
+        let tmp = normal.mult(-2 * this.dot(normal));
+        return this.add(tmp);
+    }
+
+    parity() {
+        return (this.x * this.y) / Math.abs(this.x * this.y);
+    }
+
+    dist(v) {
+        let dx = this.x - v.x;
+        let dy = this.y - v.y;
 
         return Math.sqrt((dx * dx) + (dy * dy));
+    }
+
+    angle(v) {
+        return this.direction - v.direction;
+    }
+
+    toString() {
+        return `(${this.x}, ${this.y})`;
     }
 }
 
@@ -88,7 +157,7 @@ class Rectangle {
 
     calculateData(p1, width, height) {
         this.p1 = p1;
-        this.p2 = new Point(p1.x + width, p1.y + height);
+        this.p2 = new Vector(p1.x + width, p1.y + height);
         this.width = width;
         this.height = height;
         this.x = p1.x + width / 2;
@@ -157,9 +226,9 @@ class Triangle {
         let y2 = this.pos.y + this.r * Math.cos(this.angle + (2 * Math.PI / 3));
         let y3 = this.pos.y + this.r * Math.cos(this.angle - (2 * Math.PI / 3));
 
-        let p1 = new Point(x1, y1);
-        let p2 = new Point(x2, y2);
-        let p3 = new Point(x3, y3);
+        let p1 = new Vector(x1, y1);
+        let p2 = new Vector(x2, y2);
+        let p3 = new Vector(x3, y3);
         return [p1, p2, p3];
     }
 
@@ -175,20 +244,23 @@ class Triangle {
 
 class Ball extends Circle {
     constructor(par, x, y, r) {
-        super(new Point(x, y), r);
+        super(new Vector(x, y), r);
         this.par = par;
         this.vel = new Vector(0, 0);
         this.ts = 1;
     }
 
     update() {
-        this.pos.x += this.vel.x;
-        this.pos.y += this.vel.y;
+        this.pos = this.pos.add(this.vel);
+
+        if (this.par.millis() % 1000 < 20) {
+            console.log(this.pos.toString());
+        }
     }
 
     draw() {
-        this.par.noStroke();
-        this.par.fill(255);
+        this.par.stroke(255);
+        this.par.noFill();
         this.par.circle(this.pos.x, this.pos.y, this.r);
 
         if (DEBUG) {
@@ -207,12 +279,39 @@ class Ball extends Circle {
 
         let nearX = Math.max(rect.p1.x, Math.min(this.pos.x, rect.p2.x));
         let nearY = Math.max(rect.p1.y, Math.min(this.pos.y, rect.p2.y));
-        let dist = new Vector(Math.abs(this.pos.x - nearX), Math.abs(this.pos.y - nearY));
+        let dist = new Vector(nearY - this.pos.y, -(nearX - this.pos.x));
+
+        let radius = new Vector(this.pos.y - nearY, this.pos.x - nearX);
 
         if (dist.magnitude <= this.r) {
-            console.log(dist.parity());
-            let normal = new Vector(-dist.y, dist.x).normalize().mult(dist.parity());
-            this.setVelocity(this.vel.bounce(normal));
+            console.log(`Distance: ${radius.toString()}`);
+
+            if (Math.abs(radius.y) === Math.abs(radius.x)) {
+                // 45 degrees
+                console.log('Collision at 45 degrees');
+                this.vel = this.vel.mult(-1);
+            } else if (radius.y === 0) {
+                // top-bottom
+                console.log('Collision on horizontal plane');
+                this.setVelocity(new Vector(this.vel.x, -this.vel.y));
+            } else if (radius.x === 0) {
+                // left-right
+                console.log('Collision on vertical plane');
+                this.setVelocity(new Vector(-this.vel.x, this.vel.y));
+            } else {
+                // corners
+                console.log('Collision on corner');
+                let normal = new Vector(-dist.y, dist.x).normalize();
+                this.setVelocity(this.vel.bounce(normal));
+
+            }
+
+            let distToMove = this.r - radius.magnitude;
+            console.log(`Displacement needed: ${distToMove}`);
+
+            let theta = this.pos.angle(radius);
+            this.pos.x += Math.cos(theta) * distToMove;
+            this.pos.y += Math.sin(theta) * distToMove;
         }
 
 
@@ -225,18 +324,18 @@ class Ball extends Circle {
 
 class Brick extends Rectangle {
     constructor(par, x, y) {
-        super(new Point(x, y), 32, 16);
+        super(new Vector(x, y), 32, 16);
         this.par = par;
     }
 
     update() {
-        let p = new Point(this.par.mouseX, this.par.mouseY);
-        this.calculateData(new Point(p.x - this.width / 2, p.y - this.height / 2), this.width, this.height);
+        let p = new Vector(this.par.mouseX, this.par.mouseY);
+        this.calculateData(new Vector(p.x - this.width / 2, p.y - this.height / 2), this.width, this.height);
     }
 
     draw() {
-        this.par.noStroke();
-        this.par.fill(255);
+        this.par.stroke(255);
+        this.par.noFill();
         this.par.rect(this.x, this.y, this.width, this.height);
 
         if (DEBUG) {
@@ -244,67 +343,6 @@ class Brick extends Rectangle {
             this.par.strokeWeight(2);
             this.par.point(this.x, this.y);
         }
-    }
-}
-
-class Vector {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-    }
-
-    get magnitude() {
-        return Math.sqrt(this.x * this.x + this.y * this.y);
-    }
-
-    set magnitude(value) {
-        let dir = this.direction;
-        this.x = Math.cos(dir) * value;
-        this.y = Math.sin(dir) * value;
-    }
-
-    get direction() {
-        return Math.atan2(this.y, this.x);
-    }
-
-    set direction(angle) {
-        let mag = this.magnitude;
-        this.x = Math.cos(angle) * mag;
-        this.y = Math.sin(angle) * mag;
-    }
-
-
-    dot(a) {
-        return a.x * this.x + a.y * this.y;
-    }
-
-    add(a) {
-        return new Vector(a.x + this.x, a.y + this.y);
-    }
-
-    sub(a) {
-        return new Vector(this.x - a.x, this.y - a.y);
-    }
-
-    mult(scalar) {
-        return new Vector(this.x * scalar, this.y * scalar);
-    }
-
-    div(scalar) {
-        return new Vector(this.x / scalar, this.y / scalar);
-    }
-
-    normalize() {
-        return new Vector(this.x / this.magnitude, this.y / this.magnitude);
-    }
-
-    bounce(normal) {
-        let tmp = normal.mult(-2 * this.dot(normal));
-        return this.add(tmp);
-    }
-
-    parity() {
-        return (this.x * this.y) / Math.abs(this.x * this.y);
     }
 }
 
