@@ -13,6 +13,8 @@ const DEBUG = true;
 const brickGame = function (p) {
 
     const GRID_SIZE = 16;
+    const WIDTH = 2 * 9 * GRID_SIZE;
+    const HEIGHT = 2 * 16 * GRID_SIZE;
 
     let paused;
 
@@ -21,22 +23,21 @@ const brickGame = function (p) {
     let brickSet;
 
     p.setup = () => {
+        this.p = p;
+
         // p5 preparation
         let res = scaleResolution(9 * GRID_SIZE, 16 * GRID_SIZE);
         p.frameRate(30);
-        let cnv = p.createCanvas(res.w, res.h);
+        let cnv = p.createCanvas(WIDTH, HEIGHT);
         cnv.parent('gamearea');
 
         // Game objects
         screen = new Rectangle(new Vector(0, 0), p.width, p.height);
-        ball = new Ball(p, p.width / 2, p.height / 2, 8);
+        this.ball = new Ball(this, p.width / 2, p.height / 2, 8);
         //brick = new Brick(p, 20 * GRID_SIZE, 20 * GRID_SIZE);
-        brickSet = [];
-        for (let i = 0; i < 10; i++) {
-            brickSet.push(new Brick(p, (i * 2 * GRID_SIZE) + i, 0));
-        }
+        this.brickSet = new BrickGroup(this, 9);
 
-        ball.setVelocity(new Vector(Math.PI, Math.random() * Math.PI * 2));
+        this.ball.setVelocity(new Vector(Math.PI, (Math.random() * Math.PI * 2) + Math.PI));
 
         paused = false;
     };
@@ -51,21 +52,16 @@ const brickGame = function (p) {
         }
 
         // update objects
-        ball.update();
+        this.ball.update();
+        this.brickSet.update();
         //brick.update();
         //ball.collision(brick);
-        ball.screenCollide();
+        this.ball.screenCollide();
 
         // draw objects
-        ball.draw();
+        this.ball.draw();
         //brick.draw();
-        for (let i = 0; i < brickSet.length; i++) {
-            let br = brickSet[i];
-            if (!br.destroyed) {
-                br.destroyed = ball.collision(br);
-                br.draw();
-            }
-        }
+        this.brickSet.draw();
     };
 
     p.keyTyped = () => {
@@ -81,8 +77,8 @@ const brickGame = function (p) {
     };
 
     p.windowResized = () => {
-        let res = scaleResolution(9 * GRID_SIZE, 16 * GRID_SIZE);
-        p.resizeCanvas(res.w, res.h);
+        //let res = scaleResolution(9 * GRID_SIZE, 16 * GRID_SIZE);
+        //p.resizeCanvas(res.w, res.h);
     };
 
     let scaleResolution = (unitsX, unitsY) => {
@@ -176,6 +172,10 @@ class Vector {
 
     toString() {
         return `(${this.x}, ${this.y})`;
+    }
+
+    endpoint(from) {
+        return new Vector(this.x + from.x, this.y + from.y);
     }
 }
 
@@ -278,9 +278,9 @@ class Triangle {
 }
 
 class Ball extends Circle {
-    constructor(par, x, y, r) {
+    constructor(g, x, y, r) {
         super(new Vector(x, y), r);
-        this.par = par;
+        this.g = g;
         this.vel = new Vector(0, 0);
         this.ts = 1;
         this.bounds = new Rectangle(this.pos, 2 * this.r, 8 * this.r);
@@ -289,23 +289,26 @@ class Ball extends Circle {
     update() {
         this.pos = this.pos.add(this.vel);
 
-        if (this.par.millis() % 1000 < 20) {
+        if (this.g.p.millis() % 1000 < 20) {
             console.log(this.pos.toString());
         }
 
-        this.bounds.setPosition(this.pos);
+        //this.bounds.setPosition(this.pos);
     }
 
     draw() {
-        this.par.stroke(255);
-        this.par.noFill();
-        this.par.circle(this.pos.x, this.pos.y, this.r);
+        this.g.p.stroke(255);
+        this.g.p.noFill();
+        this.g.p.circle(this.pos.x, this.pos.y, this.r);
 
         if (DEBUG) {
-            this.par.stroke('red');
-            this.par.strokeWeight(2);
-            this.par.point(this.pos.x, this.pos.y);
-            this.par.rect(this.bounds.p1.x, this.bounds.p1.y, this.bounds.width, this.bounds.height);
+            this.g.p.stroke('red');
+            this.g.p.strokeWeight(2);
+            this.g.p.point(this.pos.x, this.pos.y);
+            //this.g.p.rect(this.bounds.p1.x, this.bounds.p1.y, this.bounds.width, this.bounds.height);
+            let velTip = this.vel.endpoint(this.pos);
+            this.g.p.stroke(this.g.p.color(30, 255, 0));
+            this.g.p.line(this.pos.x, this.pos.y, velTip.x, velTip.y);
         }
     }
 
@@ -314,10 +317,10 @@ class Ball extends Circle {
     }
 
     screenCollide() {
-        if (this.pos.x + this.r + this.vel.x >= this.par.width || this.pos.x - this.r + this.vel.x <= 0) {
+        if (this.pos.x + this.r + this.vel.x >= this.g.p.width || this.pos.x - this.r + this.vel.x <= 0) {
             this.vel.x *= -1;
         }
-        if (this.pos.y + this.r + this.vel.y >= this.par.height || this.pos.y - this.r + this.vel.y <= 0) {
+        if (this.pos.y + this.r + this.vel.y >= this.g.p.height || this.pos.y - this.r + this.vel.y <= 0) {
             this.vel.y *= -1;
         }
     }
@@ -330,7 +333,7 @@ class Ball extends Circle {
 
         let nearX = Math.max(rect.p1.x, Math.min(this.pos.x, rect.p2.x));
         let nearY = Math.max(rect.p1.y, Math.min(this.pos.y, rect.p2.y));
-        let dist = new Vector(nearY - this.pos.y, -(nearX - this.pos.x));
+        let dist = new Vector((nearX - this.pos.x), nearY - this.pos.y);
 
         let radius = new Vector(this.pos.y - nearY, this.pos.x - nearX);
 
@@ -351,7 +354,7 @@ class Ball extends Circle {
             } else {
                 // corners
                 let normal = new Vector(-dist.y, dist.x).normalize();
-                this.setVelocity(this.vel.bounce(normal));
+                this.setVelocity(this.vel.bounce(dist.normalize()));
                 collide = true;
             }
 
@@ -363,9 +366,9 @@ class Ball extends Circle {
         }
 
         if (DEBUG) {
-            this.par.stroke(colour);
-            this.par.strokeWeight(1);
-            this.par.line(this.pos.x, this.pos.y, nearX, nearY);
+            this.g.p.stroke(colour);
+            this.g.p.strokeWeight(1);
+            this.g.p.line(this.pos.x, this.pos.y, nearX, nearY);
         }
 
         return collide;
@@ -373,38 +376,64 @@ class Ball extends Circle {
 }
 
 class Brick extends Rectangle {
-    constructor(par, x, y) {
+    constructor(g, x, y) {
         super(new Vector(x, y), 32, 16);
-        this.par = par;
+        this.g = g;
         this.destroyed = false;
     }
 
     update() {
-        let p = new Vector(this.par.mouseX, this.par.mouseY);
+        let p = new Vector(this.g.p.mouseX, this.g.p.mouseY);
         this.calculateData(new Vector(p.x - this.width / 2, p.y - this.height / 2), this.width, this.height);
     }
 
     draw() {
-        this.par.strokeWeight(1);
-        this.par.stroke(255);
-        this.par.noFill();
-        this.par.rect(this.x, this.y, this.width, this.height);
+        this.g.p.strokeWeight(1);
+        this.g.p.stroke(255);
+        this.g.p.noFill();
+        this.g.p.rect(this.x, this.y, this.width, this.height);
 
         if (DEBUG) {
-            this.par.stroke('red');
-            this.par.strokeWeight(2);
-            this.par.point(this.x, this.y);
+            this.g.p.stroke('red');
+            this.g.p.strokeWeight(2);
+            this.g.p.point(this.x, this.y);
         }
     }
 }
 
 class BrickGroup {
-    constructor(num) {
-        this.bricks = new Array(num);
+    constructor(g, num) {
+        this.g = g;
+        this.bricks = [];
+        for (let i = 0; i < num; i++) {
+            this.add(new Brick(this.g, i * 32, 0));
+        }
+        console.log(this.bricks);
     }
 
     get size() {
         return this.bricks.length;
+    }
+
+    update() {
+        let br;
+        for (let i = 0; i < this.size; i++) {
+            br = this.get(i);
+            if (br) {
+                if (this.g.ball.collision(br)) {
+                    window.setTimeout(br.destroyed = true, 32);
+                }
+            }
+        }
+    }
+
+    draw() {
+        let br;
+        for (let i = 0; i < this.size; i++) {
+            br = this.get(i);
+            if (br)
+                br.draw();
+        }
     }
 
     add(brick) {
@@ -412,17 +441,23 @@ class BrickGroup {
     }
 
     get(index) {
-        if (0 < index && index < this.bricks.length) {
-            return this.bricks[index];
+        if (0 <= index && index < this.bricks.length) {
+            let brick = this.bricks[index];
+            if (brick && !brick.destroyed)
+                return this.bricks[index];
         }
         return false;
     }
 
     remove(brick) {
-        let index = this.bricks.indexOf(brick);
-        if (index > -1) {
+        if (this.contains(brick))
             this.bricks.splice(index, 1);
-        }
+    }
+
+    contains(brick) {
+        let index = this.bricks.indexOf(brick);
+        console.log(`Contains brick: ${index > -1}`);
+        return index > -1;
     }
 }
 
