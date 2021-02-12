@@ -7,10 +7,10 @@
  */
 const P5_LOCATION = 'https://connordoman.com/res/p5/p5.js';
 
-const DEBUG = true;
+const DEBUG = false;
 
 
-const brickGame = function (p) {
+const BRICK_GAME = function (p) {
 
     const GRID_SIZE = 16;
     const WIDTH = 2 * 9 * GRID_SIZE;
@@ -35,7 +35,7 @@ const brickGame = function (p) {
         screen = new Rectangle(new Vector(0, 0), p.width, p.height);
         this.ball = new Ball(this, p.width / 2, p.height / 2, 8);
         //brick = new Brick(p, 20 * GRID_SIZE, 20 * GRID_SIZE);
-        this.brickSet = new BrickGroup(this, 9);
+        this.brickSet = new BrickGroup(this, BrickGroup.gridLayout);
 
         this.ball.setVelocity(new Vector(Math.PI, (Math.random() * Math.PI * 2) + Math.PI));
 
@@ -333,7 +333,7 @@ class Ball extends Circle {
 
         let nearX = Math.max(rect.p1.x, Math.min(this.pos.x, rect.p2.x));
         let nearY = Math.max(rect.p1.y, Math.min(this.pos.y, rect.p2.y));
-        let dist = new Vector((nearX - this.pos.x), nearY - this.pos.y);
+        let dist = new Vector(nearX - this.pos.x, nearY - this.pos.y);
 
         let radius = new Vector(this.pos.y - nearY, this.pos.x - nearX);
 
@@ -353,7 +353,6 @@ class Ball extends Circle {
                 collide = true;
             } else {
                 // corners
-                let normal = new Vector(-dist.y, dist.x).normalize();
                 this.setVelocity(this.vel.bounce(dist.normalize()));
                 collide = true;
             }
@@ -390,7 +389,7 @@ class Brick extends Rectangle {
     draw() {
         this.g.p.strokeWeight(1);
         this.g.p.stroke(255);
-        this.g.p.noFill();
+        this.g.p.fill(128);
         this.g.p.rect(this.x, this.y, this.width, this.height);
 
         if (DEBUG) {
@@ -402,11 +401,25 @@ class Brick extends Rectangle {
 }
 
 class BrickGroup {
-    constructor(g, num) {
+    constructor(g, layout) {
         this.g = g;
         this.bricks = [];
-        for (let i = 0; i < num; i++) {
-            this.add(new Brick(this.g, i * 32, 0));
+        if (Array.isArray(layout)) {
+            // custom layouts
+            for (let y = 0; y < layout.length; y++) {
+                for (let x = 0; x < layout[y].length; x++) {
+                    let val = layout[y][x];
+                    //alert(`Brick is a: ${val}`)
+                    if (val === 1) {
+                        this.add(new Brick(this.g, x * 2 * 16, y * 16));
+                    }
+                }
+            }
+        } else if (typeof layout === 'number') {
+            // default row of one
+            for (let i = 0; i < layout; i++) {
+                this.add(new Brick(this.g, (i % 9) * 2 * g.GRID_SIZE, (i / 9) * g.GRID_SIZE));
+            }
         }
         console.log(this.bricks);
     }
@@ -461,6 +474,12 @@ class BrickGroup {
     }
 }
 
+BrickGroup.gridLayout = [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [0, 1, 0, 1, 0, 1, 0, 1, 0],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1]
+];
+
 
 /**
  * 
@@ -489,7 +508,7 @@ window.addEventListener('load', (evt) => {
     }
 
     let startGame = () => {
-        game = new p5(brickGame);
+        game = new p5(BRICK_GAME);
     }
 
     if (!isScriptAlreadyIncluded(P5_LOCATION)) {
