@@ -7,38 +7,39 @@
  */
 const P5_LOCATION = 'https://connordoman.com/res/p5/p5.js';
 
-const DEBUG = false;
+const DEBUG = true;
 
 
 const BRICK_GAME = function (p) {
 
-    let paused;
-
-    let ball;
-    let brick;
-    let brickSet;
+    p.preload = () => {
+        this.font = p.loadFont('./res/fonts/press_start_2p.ttf');
+    };
 
     p.setup = () => {
         this.gridSize = 16;
         this.unitsX = 9;
         this.unitsY = 16;
+        this.score = 0;
+        this.paused = false;
         this.p = p;
 
         // p5 preparation
-        let res = scaleResolution(9 * this.gridSize, 16 * this.gridSize);
         p.frameRate(60);
         let cnv = p.createCanvas(2 * this.unitsX * this.gridSize, 2 * this.unitsY * this.gridSize);
         cnv.parent('gamearea');
+        p.textFont(this.font);
 
         // Game objects
-        screen = new Rectangle(new Vector(0, 0), p.width, p.height);
         this.ball = new Ball(this, this.unitsX * this.gridSize, 8 * this.gridSize, 8);
         this.brickSet = new BrickGroup(this, BrickGroup.gridLayout);
         this.paddle = new Paddle(this);
 
+        this.brickSet.translate(0, 2 * this.gridSize);
+
         this.ball.setVelocity(new Vector(0, 5));
 
-        paused = false;
+        this.paused = false;
     };
 
     p.draw = () => {
@@ -47,7 +48,7 @@ const BRICK_GAME = function (p) {
         p.ellipseMode(p.RADIUS);
 
         if (DEBUG) {
-            drawGrid();
+            this.drawGrid();
         }
 
         // update objects
@@ -56,26 +57,18 @@ const BRICK_GAME = function (p) {
         this.paddle.update();
         this.ball.screenCollide();
 
+        // draw hud
+        this.drawGameInfo();
+
         // draw objects
         this.ball.draw();
         this.brickSet.draw();
         this.paddle.draw();
-
-
-        // move paddle with mouse
-        if (p.mouseIsPressed) {
-        }
     };
 
     p.keyTyped = () => {
         if (p.key === ' ') {
-            paused = !paused;
-        }
-
-        if (paused) {
-            p.noLoop();
-        } else if (!paused) {
-            p.loop();
+            this.pause();
         }
     };
 
@@ -84,12 +77,12 @@ const BRICK_GAME = function (p) {
         //p.resizeCanvas(res.w, res.h);
     };
 
-    let scaleResolution = (unitsX, unitsY) => {
+    this.scaleResolution = (unitsX, unitsY) => {
         let scrRatio = p.windowWidth / p.windowHeight;
         return scrRatio > unitsX / unitsY ? { w: unitsX * (p.windowHeight / unitsY), h: p.windowHeight } : { w: p.windowWidth, h: unitsY * (p.windowWidth / unitsX) };
     };
 
-    let drawGrid = () => {
+    this.drawGrid = () => {
         // draw grid
         p.stroke(p.color(0, 0, 50));
         p.strokeWeight(1);
@@ -100,6 +93,20 @@ const BRICK_GAME = function (p) {
             }
         }
     };
+
+    this.drawGameInfo = () => {
+        // top border
+        p.stroke(255);
+        p.strokeWeight(1);
+        p.line(0, this.gridSize * 2, p.width, this.gridSize * 2);
+
+        // score
+        p.noStroke();
+        p.fill(255);
+        p.textAlign(p.LEFT, p.CENTER);
+        p.textSize(this.gridSize * 3 / 4);
+        p.text(`Score: ${this.score}`, this.gridSize / 2, this.gridSize);
+    }
 
     this.log = (obj) => {
         if (DEBUG) {
@@ -112,6 +119,15 @@ const BRICK_GAME = function (p) {
             console.error(obj);
         }
     };
+
+    this.pause = () => {
+        this.paused = !this.paused;
+        if (this.paused) {
+            p.noLoop();
+        } else if (!this.paused) {
+            p.loop();
+        }
+    }
 }
 
 class Vector {
@@ -398,12 +414,11 @@ class Ball extends Circle {
         this.g.p.circle(this.pos.x, this.pos.y, this.r);
 
         if (DEBUG) {
-            this.g.p.stroke(this.g.p.color(125, 100, 100));
             this.g.p.strokeWeight(2);
             this.g.p.point(this.pos.x, this.pos.y);
             //this.g.p.rect(this.bounds.p1.x, this.bounds.p1.y, this.bounds.width, this.bounds.height);
             let velTip = this.vel.endpoint(this.pos);
-            this.g.p.stroke(this.g.p.color(30, 255, 0));
+            this.g.p.stroke(this.g.p.color(125, 100, 100));
             this.g.p.line(this.pos.x, this.pos.y, velTip.x, velTip.y);
         }
     }
@@ -416,8 +431,12 @@ class Ball extends Circle {
         if (this.pos.x + this.r + this.vel.x >= this.g.p.width || this.pos.x - this.r + this.vel.x <= 0) {
             this.vel.x *= -1;
         }
-        if (this.pos.y + this.r + this.vel.y >= this.g.p.height || this.pos.y - this.r + this.vel.y <= 0) {
+        if (this.pos.y - this.r + this.vel.y < this.g.gridSize * 2) {
             this.vel.y *= -1;
+            this.pos.y = this.g.gridSize * 2 + this.r;
+        } else if (this.pos.y - this.r >= this.g.p.height) {
+            this.pos = new Vector(this.g.unitsX * this.g.gridSize, 8 * this.g.gridSize);
+            this.vel = new Vector(0, 5);
         }
     }
 
@@ -513,12 +532,18 @@ class Brick extends Rectangle {
             this.g.p.point(this.x, this.y);
         }
     }
+
+    toString() {
+        let str = `Brick: ${this.center.toString()}\n\tdestroyed: ${this.destroyed}`;
+        return str;
+    }
 }
 
 class BrickGroup {
     constructor(g, layout) {
         this.g = g;
         this.bricks = [];
+        this.score = 0;
         if (Array.isArray(layout)) {
             // custom layouts
             for (let y = 0; y < layout.length; y++) {
@@ -536,7 +561,8 @@ class BrickGroup {
                 this.add(new Brick(this.g, i + (i % 9) * 2 * g.GRID_SIZE, i + (i / 9) * g.GRID_SIZE));
             }
         }
-        this.g.log(this.bricks);
+        this.g.log(this.toString());
+        this.pos = new Vector(0, 0);
     }
 
     get size() {
@@ -550,6 +576,11 @@ class BrickGroup {
             if (br) {
                 if (this.g.ball.collision(br)) {
                     window.setTimeout(br.destroyed = true, 50);
+                    this.g.score++;
+
+                    if (this.score === this.g.score) {
+                        this.g.pause();
+                    }
                 }
             }
         }
@@ -565,7 +596,10 @@ class BrickGroup {
     }
 
     add(brick) {
-        this.bricks.push(brick);
+        if (!this.contains(brick)) {
+            this.bricks.push(brick);
+            this.score++;
+        }
     }
 
     get(index) {
@@ -586,6 +620,22 @@ class BrickGroup {
         let index = this.bricks.indexOf(brick);
         return index > -1;
     }
+
+    translate(x, y) {
+        this.pos = new Vector(x, y);
+        for (let i = 0; i < this.size; i++) {
+            let br = this.get(i);
+            br.setPosition(this.pos.add(br.p1));
+        }
+    }
+
+    toString() {
+        let str = '';
+        for (let i = 0; i < this.size; i++) {
+            str += this.get(i).toString() + '\n';
+        }
+        return str;
+    }
 }
 
 BrickGroup.gridLayout = [
@@ -598,8 +648,6 @@ class Paddle extends Rectangle {
     constructor(g) {
         super(new Vector((g.p.width / 2) - 2.5 * g.gridSize, (g.gridSize * 29)), g.gridSize * 5, g.gridSize / 2);
         this.g = g;
-
-        this.g.log(this);
         this.vel = new Vector(4, 0);
         this.indicator = new Triangle(new Vector(0, 0), this.height / 2, Math.PI);
     }
@@ -642,15 +690,11 @@ class Paddle extends Rectangle {
 
     collision(ball) {
         let collide = false;
-        if (ball.pos.x > this.p1.x && ball.pos.x < this.p2.x) {
+        if (ball.pos.x - ball.r > this.p1.x && ball.pos.x + ball.r < this.p2.x) {
             // center of paddle
             let disp = ball.pos.x - this.p1.x;
             let angle = this.g.p.map(disp, 0, this.width, -Math.PI, 0);
             ball.vel.direction = angle;
-            collide = true;
-        } else if (ball.pos.x + ball.r > this.p1.x && ball.pos.x - ball.r < this.p2.x) {
-            // corners
-            ball.pos.x > this.x ? ball.vel.direction = 45 : ball.vel.direction = 135;
             collide = true;
         }
         return collide;
