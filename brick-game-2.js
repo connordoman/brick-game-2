@@ -12,10 +12,6 @@ const DEBUG = false;
 
 const BRICK_GAME = function (p) {
 
-    const GRID_SIZE = 16;
-    const WIDTH = 2 * 9 * GRID_SIZE;
-    const HEIGHT = 2 * 16 * GRID_SIZE;
-
     let paused;
 
     let ball;
@@ -23,21 +19,24 @@ const BRICK_GAME = function (p) {
     let brickSet;
 
     p.setup = () => {
+        this.gridSize = 16;
+        this.unitsX = 9;
+        this.unitsY = 16;
         this.p = p;
 
         // p5 preparation
-        let res = scaleResolution(9 * GRID_SIZE, 16 * GRID_SIZE);
-        p.frameRate(30);
-        let cnv = p.createCanvas(WIDTH, HEIGHT);
+        let res = scaleResolution(9 * this.gridSize, 16 * this.gridSize);
+        p.frameRate(60);
+        let cnv = p.createCanvas(2 * this.unitsX * this.gridSize, 2 * this.unitsY * this.gridSize);
         cnv.parent('gamearea');
 
         // Game objects
         screen = new Rectangle(new Vector(0, 0), p.width, p.height);
-        this.ball = new Ball(this, p.width / 2, p.height / 2, 8);
-        //brick = new Brick(p, 20 * GRID_SIZE, 20 * GRID_SIZE);
+        this.ball = new Ball(this, this.unitsX * this.gridSize, 8 * this.gridSize, 8);
         this.brickSet = new BrickGroup(this, BrickGroup.gridLayout);
+        this.paddle = new Paddle(this);
 
-        this.ball.setVelocity(new Vector(Math.PI, (Math.random() * Math.PI * 2) + Math.PI));
+        this.ball.setVelocity(new Vector(0, 5));
 
         paused = false;
     };
@@ -54,14 +53,13 @@ const BRICK_GAME = function (p) {
         // update objects
         this.ball.update();
         this.brickSet.update();
-        //brick.update();
-        //ball.collision(brick);
+        this.paddle.update();
         this.ball.screenCollide();
 
         // draw objects
         this.ball.draw();
-        //brick.draw();
         this.brickSet.draw();
+        this.paddle.draw();
     };
 
     p.keyTyped = () => {
@@ -88,12 +86,12 @@ const BRICK_GAME = function (p) {
 
     let drawGrid = () => {
         // draw grid
-        p.stroke(128);
+        p.stroke(p.color(0, 0, 50));
         p.strokeWeight(1);
-        for (let i = 0; i < p.height / GRID_SIZE; i++) {
-            p.line(0, i * GRID_SIZE, p.width, i * GRID_SIZE);
-            for (let j = 0; j < p.width / GRID_SIZE; j++) {
-                p.line(j * GRID_SIZE, 0, j * GRID_SIZE, p.height);
+        for (let i = 0; i < p.height / this.gridSize; i++) {
+            p.line(0, i * this.gridSize, p.width, i * this.gridSize);
+            for (let j = 0; j < p.width / this.gridSize; j++) {
+                p.line(j * this.gridSize, 0, j * this.gridSize, p.height);
             }
         }
     };
@@ -103,6 +101,10 @@ class Vector {
     constructor(x, y) {
         this.x = x;
         this.y = y;
+    }
+
+    get distanceSq() {
+        return this.x * this.x + this.y * this.y;
     }
 
     get magnitude() {
@@ -125,6 +127,42 @@ class Vector {
         this.y = Math.sin(angle) * mag;
     }
 
+    get degrees() {
+        return this.direction * (180 / Math.PI);
+    }
+
+    moveLeft(m) {
+        return new Vector(this.x - m, this.y);
+    }
+
+    moveRight(m) {
+        return new Vector(this.x + m, this.y);
+    }
+
+    moveUp(m) {
+        return new Vector(this.x, this.y - m);
+    }
+
+    moveDown(m) {
+        return new Vector(this.x, this.y - m);
+    }
+
+    left(a) {
+        return new Vector(this.x - a.x, this.y);
+    }
+
+    right(a) {
+        return new Vector(this.x + a.x, this.y);
+    }
+
+    up(a) {
+        return new Vector(this.x, this.y - a.y);
+    }
+
+    down(a) {
+        return new Vector(this.x, this.y + a.y);
+    }
+
 
     dot(a) {
         return a.x * this.x + a.y * this.y;
@@ -138,6 +176,14 @@ class Vector {
         return new Vector(this.x - a.x, this.y - a.y);
     }
 
+    increase(scalar) {
+        return new Vector(this.x + scalar * Math.cos(this.direction), this.y + scalar * Math.sin(this.direction));
+    }
+
+    decrease(scalar) {
+        return new Vector(this.x - scalar * Math.cos(this.direction), this.y - scalar * Math.sin(this.direction));
+    }
+
     mult(scalar) {
         return new Vector(this.x * scalar, this.y * scalar);
     }
@@ -147,12 +193,17 @@ class Vector {
     }
 
     normalize() {
-        return new Vector(this.x / this.magnitude, this.y / this.magnitude);
+        let mag = this.magnitude;
+        if (mag == 0) {
+            alert('MAGNITUDE ZERO');
+            return new Vector(1, 1);
+        }
+        return new Vector(this.x / mag, this.y / mag);
     }
 
-    bounce(normal) {
-        let tmp = normal.mult(-2 * this.dot(normal));
-        return this.add(tmp);
+    bounce(normed) {
+        let tmp = normed.mult(2 * this.dot(normed));
+        return this.sub(tmp);
     }
 
     parity() {
@@ -170,31 +221,45 @@ class Vector {
         return this.direction - v.direction;
     }
 
-    toString() {
-        return `(${this.x}, ${this.y})`;
-    }
-
     endpoint(from) {
         return new Vector(this.x + from.x, this.y + from.y);
+    }
+
+    roundDown() {
+        return new Vector(Math.floor(this.x), Math.floor(this.y));
+    }
+
+    toString() {
+        return `${this.magnitude} @ ${this.degrees}° (${this.x}, ${this.y})`;
+    }
+
+    kineticEnergy() {
+        return Math.abs(this.x) + Math.abs(this.y);
+    }
+
+    rotate(angle) {
+        let turn = new Vector(this.x, this.y);
+        turn.direction += angle;
+        return turn;
     }
 }
 
 class Rectangle {
     constructor(p1, width, height) {
-        this.calculateData(p1, width, height);
+        this.width = width;
+        this.height = height;
+        this.calculateData(p1);
     }
 
     setPosition(pos) {
-        this.calculateData(pos, this.width, this.height);
+        this.calculateData(pos);
     }
 
-    calculateData(p1, width, height) {
+    calculateData(p1) {
         this.p1 = p1;
-        this.p2 = new Vector(p1.x + width, p1.y + height);
-        this.width = width;
-        this.height = height;
-        this.x = p1.x + width / 2;
-        this.y = p1.y + height / 2;
+        this.p2 = new Vector(p1.x + this.width, p1.y + this.height);
+        this.x = p1.x + this.width / 2;
+        this.y = p1.y + this.height / 2;
         this.center = new Vector(this.x, this.y);
     }
 
@@ -282,15 +347,30 @@ class Ball extends Circle {
         super(new Vector(x, y), r);
         this.g = g;
         this.vel = new Vector(0, 0);
-        this.ts = 1;
         this.bounds = new Rectangle(this.pos, 2 * this.r, 8 * this.r);
+        this.lastPos = this.pos;
     }
 
     update() {
+        // shitty ass NaN solution
+        if (isNaN(this.vel.x) || isNaN(this.vel.y)) {
+            console.error('Velocity is NaN');
+            this.vel = new Vector(0, 3);
+        }
+
+        // if it's only moving side to side
+        if (this.vel.y === 0) {
+            this.vel.y += 0.02;
+        } else if (Math.abs(this.vel.y) < 2) {
+            this.vel.y += 0.01 * (Math.abs(this.vel.y) / this.vel.y);
+        }
+
+        this.lastPos = this.pos;
         this.pos = this.pos.add(this.vel);
 
+
         if (this.g.p.millis() % 1000 < 20) {
-            console.log(this.pos.toString());
+            console.log(`Ball: ${this.pos.toString()}\nBall.vel: ${this.vel.toString()}\nBall.vel.kineticEnergy: ${this.vel.kineticEnergy()}`);
         }
 
         //this.bounds.setPosition(this.pos);
@@ -326,48 +406,61 @@ class Ball extends Circle {
     }
 
     collision(rect) {
-
         let colour = 'red';
-
         let collide = false;
 
         let nearX = Math.max(rect.p1.x, Math.min(this.pos.x, rect.p2.x));
         let nearY = Math.max(rect.p1.y, Math.min(this.pos.y, rect.p2.y));
-        let dist = new Vector(nearX - this.pos.x, nearY - this.pos.y);
 
-        let radius = new Vector(this.pos.y - nearY, this.pos.x - nearX);
+        let radius = new Vector(nearX, nearY);
+        let dist = radius.sub(this.pos);
 
-        if (dist.magnitude <= this.r) {
+        if (dist.distanceSq < this.r * this.r) {
+            let distToMove = dist.magnitude - this.r;
+            let theta = this.vel.angle(dist.rotate(-Math.PI / 2));
+            let dispX = 0;
+            let dispY = 0;
+
+            dispX = Math.cos(theta) * distToMove;
+            dispY = Math.sin(theta) * distToMove;
+
+            this.pos.x += dispX;
+            this.pos.y += dispY;
+
+            console.log(dist.toString());
 
             if (Math.abs(radius.y) === Math.abs(radius.x)) {
                 // 45 degrees
                 this.vel = this.vel.mult(-1);
                 collide = true;
-            } else if (radius.y === 0) {
+                console.log('Collision at 45°');
+            } else if (theta % (Math.PI / 2) === 0) {
                 // top-bottom
                 this.setVelocity(new Vector(this.vel.x, -this.vel.y));
                 collide = true;
-            } else if (radius.x === 0) {
+                console.log('Collision on horizontal');
+            } else if (theta % Math.PI === 0) {
                 // left-right
                 this.setVelocity(new Vector(-this.vel.x, this.vel.y));
                 collide = true;
+                console.log('Collision on vertical');
             } else {
                 // corners
                 this.setVelocity(this.vel.bounce(dist.normalize()));
                 collide = true;
+
+                console.log('Collision at ' + theta * (180 / Math.PI) + '°');
             }
 
-            let distToMove = this.r - radius.magnitude;
-
-            let theta = this.pos.angle(radius);
-            this.pos.x += Math.cos(theta) * distToMove;
-            this.pos.y += Math.sin(theta) * distToMove;
+            if (DEBUG) {
+                console.log(`Distance to move: ${distToMove} (${dispX},${dispY}) ${(theta * (180 / Math.PI)).toFixed(2)}°`);
+            }
         }
 
         if (DEBUG) {
             this.g.p.stroke(colour);
             this.g.p.strokeWeight(1);
-            this.g.p.line(this.pos.x, this.pos.y, nearX, nearY);
+            this.g.p.line(this.pos.x, this.pos.y, radius.x, radius.y);
         }
 
         return collide;
@@ -376,20 +469,22 @@ class Ball extends Circle {
 
 class Brick extends Rectangle {
     constructor(g, x, y) {
-        super(new Vector(x, y), 32, 16);
+        super(new Vector(x, y), 2 * g.gridSize, g.gridSize);
         this.g = g;
         this.destroyed = false;
+        this.g.p.colorMode(this.g.p.HSB);
+        this.color = this.g.p.color(this.g.p.map(x, 0, 18 * g.gridSize, 0, 360), this.g.p.map(y, 0, 16 * g.gridSize, 75, 0), 90);
     }
 
     update() {
         let p = new Vector(this.g.p.mouseX, this.g.p.mouseY);
-        this.calculateData(new Vector(p.x - this.width / 2, p.y - this.height / 2), this.width, this.height);
+        this.calculatePos(new Vector(p.x - this.width / 2, p.y - this.height / 2));
     }
 
     draw() {
         this.g.p.strokeWeight(1);
         this.g.p.stroke(255);
-        this.g.p.fill(128);
+        this.g.p.fill(this.color);
         this.g.p.rect(this.x, this.y, this.width, this.height);
 
         if (DEBUG) {
@@ -411,14 +506,14 @@ class BrickGroup {
                     let val = layout[y][x];
                     //alert(`Brick is a: ${val}`)
                     if (val === 1) {
-                        this.add(new Brick(this.g, x * 2 * 16, y * 16));
+                        this.add(new Brick(this.g, x * 2 * g.gridSize, y * g.gridSize));
                     }
                 }
             }
         } else if (typeof layout === 'number') {
             // default row of one
             for (let i = 0; i < layout; i++) {
-                this.add(new Brick(this.g, (i % 9) * 2 * g.GRID_SIZE, (i / 9) * g.GRID_SIZE));
+                this.add(new Brick(this.g, i + (i % 9) * 2 * g.GRID_SIZE, i + (i / 9) * g.GRID_SIZE));
             }
         }
         console.log(this.bricks);
@@ -434,7 +529,7 @@ class BrickGroup {
             br = this.get(i);
             if (br) {
                 if (this.g.ball.collision(br)) {
-                    window.setTimeout(br.destroyed = true, 32);
+                    window.setTimeout(br.destroyed = true, 50);
                 }
             }
         }
@@ -479,6 +574,55 @@ BrickGroup.gridLayout = [
     [0, 1, 0, 1, 0, 1, 0, 1, 0],
     [1, 1, 1, 1, 1, 1, 1, 1, 1]
 ];
+
+class Paddle extends Rectangle {
+    constructor(g) {
+        super(new Vector((g.p.width / 2) - 2.5 * g.gridSize, (g.gridSize * 29)), g.gridSize * 5, g.gridSize / 2);
+        this.g = g;
+
+        console.log(this);
+        this.vel = new Vector(4, 0);
+        this.indicator = new Triangle(new Vector(0, 0), this.height / 2, Math.PI);
+    }
+
+    update() {
+        if (this.p1.x >= this.vel.x && this.g.p.keyIsDown(this.g.p.LEFT_ARROW)) {
+            this.setPosition(this.p1.left(this.vel));
+        } else if (this.p2.x + this.vel.x <= this.g.p.width && this.g.p.keyIsDown(this.g.p.RIGHT_ARROW)) {
+            this.setPosition(this.p1.right(this.vel));
+        }
+
+        this.collision(this.g.ball);
+    }
+
+    collision(ball) {
+        if (this.p1.y - ball.pos.y > 2 * ball.r) {
+            return;
+        }
+        if (ball.pos.x > this.p1.x && ball.pos.x < this.p2.x) {
+            if (ball.pos.y + ball.r > this.p1.y && ball.pos.y - ball.r < this.p2.y) {
+                // center of paddle
+                let disp = ball.pos.x - this.p1.x;
+                let angle = this.g.p.map(disp, 0, this.width, -Math.PI, 0);
+                ball.vel.direction = angle;
+                console.log('Collided in center of paddle.');
+            }
+        } else if (ball.pos.x + ball.r > this.p1.x && ball.pos.x - ball.r < this.p2.x) {
+            if (ball.pos.y > this.p1.y && ball.pos.y < this.p2.y) {
+                // corners
+                ball.pos.x > this.x ? ball.vel.direction = 45 : ball.vel.direction = 135;
+            }
+        }
+    }
+
+    draw() {
+        this.g.p.fill(255);
+        this.g.p.noStroke();
+        this.g.p.rect(this.x, this.y, this.width, this.height, this.g.gridSize / 4);
+        this.g.p.fill(0);
+        this.g.p.triangle(this.x + this.indicator.p1.x, this.y + this.indicator.p1.y, this.x + this.indicator.p2.x, this.y + this.indicator.p2.y, this.x + this.indicator.p3.x, this.y + this.indicator.p3.y);
+    }
+}
 
 
 /**
