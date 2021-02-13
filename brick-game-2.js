@@ -64,11 +64,6 @@ const BRICK_GAME = function (p) {
 
         // move paddle with mouse
         if (p.mouseIsPressed) {
-            if (p.mouseY > this.gridSize * 28) {
-                let halfPaddle = this.paddle.width / 2;
-                let xDisp = p.map(p.mouseX, 0, p.width, 0, p.width - this.paddle.width);
-                this.paddle.setPosition(new Vector(xDisp, this.paddle.p1.y));
-            }
         }
     };
 
@@ -103,6 +98,18 @@ const BRICK_GAME = function (p) {
             for (let j = 0; j < p.width / this.gridSize; j++) {
                 p.line(j * this.gridSize, 0, j * this.gridSize, p.height);
             }
+        }
+    };
+
+    this.log = (obj) => {
+        if (DEBUG) {
+            console.log(obj);
+        }
+    };
+
+    this.err = (obj) => {
+        if (DEBUG) {
+            console.error(obj);
         }
     };
 }
@@ -274,7 +281,6 @@ class Rectangle {
     }
 
     intersects(pt) {
-        console.log(`Checking intersection: ${pt.toString()}`);
         if (pt.x > this.p1.x &&
             pt.x < this.p2.x &&
             pt.y > this.p1.y &&
@@ -380,7 +386,7 @@ class Ball extends Circle {
 
 
         if (this.g.p.millis() % 1000 < 20) {
-            console.log(`Ball: ${this.pos.toString()}\nBall.vel: ${this.vel.toString()}\nBall.vel.kineticEnergy: ${this.vel.kineticEnergy()}`);
+            this.g.log(`Ball: ${this.pos.toString()}\nBall.vel: ${this.vel.toString()}\nBall.vel.kineticEnergy: ${this.vel.kineticEnergy()}`);
         }
 
         //this.bounds.setPosition(this.pos);
@@ -392,7 +398,7 @@ class Ball extends Circle {
         this.g.p.circle(this.pos.x, this.pos.y, this.r);
 
         if (DEBUG) {
-            this.g.p.stroke('red');
+            this.g.p.stroke(this.g.p.color(125, 100, 100));
             this.g.p.strokeWeight(2);
             this.g.p.point(this.pos.x, this.pos.y);
             //this.g.p.rect(this.bounds.p1.x, this.bounds.p1.y, this.bounds.width, this.bounds.height);
@@ -426,7 +432,12 @@ class Ball extends Circle {
         let dist = radius.sub(this.pos);
 
         if (dist.distanceSq < this.r * this.r) {
-            let distToMove = dist.magnitude - this.r;
+            let distMag = dist.magnitude;
+            if (distMag < 1) {
+                dist.magnitude = 1;
+                distMag = 1;
+            }
+            let distToMove = distMag - this.r;
             let theta = this.vel.angle(dist.rotate(-Math.PI / 2));
             let dispX = 0;
             let dispY = 0;
@@ -437,34 +448,33 @@ class Ball extends Circle {
             this.pos.x += dispX;
             this.pos.y += dispY;
 
-            console.log(dist.toString());
+            this.g.log(dist.toString());
 
             if (Math.abs(radius.y) === Math.abs(radius.x)) {
                 // 45 degrees
                 this.vel = this.vel.mult(-1);
                 collide = true;
-                console.log('Collision at 45°');
+                this.g.log('Collision at 45°');
             } else if (theta % (Math.PI / 2) === 0) {
                 // top-bottom
                 this.setVelocity(new Vector(this.vel.x, -this.vel.y));
                 collide = true;
-                console.log('Collision on horizontal');
+                this.g.log('Collision on horizontal');
             } else if (theta % Math.PI === 0) {
                 // left-right
                 this.setVelocity(new Vector(-this.vel.x, this.vel.y));
                 collide = true;
-                console.log('Collision on vertical');
+                this.g.log('Collision on vertical');
             } else {
                 // corners
                 this.setVelocity(this.vel.bounce(dist.normalize()));
                 collide = true;
 
-                console.log('Collision at ' + theta * (180 / Math.PI) + '°');
+                this.g.log('Collision at ' + theta * (180 / Math.PI) + '°');
             }
 
-            if (DEBUG) {
-                console.log(`Distance to move: ${distToMove} (${dispX},${dispY}) ${(theta * (180 / Math.PI)).toFixed(2)}°`);
-            }
+            this.g.log(`Distance to move: ${distToMove} (${dispX},${dispY}) ${(theta * (180 / Math.PI)).toFixed(2)}°`);
+
         }
 
         if (DEBUG) {
@@ -526,7 +536,7 @@ class BrickGroup {
                 this.add(new Brick(this.g, i + (i % 9) * 2 * g.GRID_SIZE, i + (i / 9) * g.GRID_SIZE));
             }
         }
-        console.log(this.bricks);
+        this.g.log(this.bricks);
     }
 
     get size() {
@@ -574,7 +584,6 @@ class BrickGroup {
 
     contains(brick) {
         let index = this.bricks.indexOf(brick);
-        console.log(`Contains brick: ${index > -1}`);
         return index > -1;
     }
 }
@@ -590,7 +599,7 @@ class Paddle extends Rectangle {
         super(new Vector((g.p.width / 2) - 2.5 * g.gridSize, (g.gridSize * 29)), g.gridSize * 5, g.gridSize / 2);
         this.g = g;
 
-        console.log(this);
+        this.g.log(this);
         this.vel = new Vector(4, 0);
         this.indicator = new Triangle(new Vector(0, 0), this.height / 2, Math.PI);
     }
@@ -600,8 +609,15 @@ class Paddle extends Rectangle {
             this.move(-1);
         } else if (this.g.p.keyIsDown(this.g.p.RIGHT_ARROW)) {
             this.move(1);
+        } else if (this.g.p.mouseIsPressed) {
+            if (this.g.p.mouseY > this.g.gridSize * 28) {
+                this.translate(this.g.p.mouseX, this.p1.y);
+            }
         }
-        this.collision(this.g.ball);
+        if (this.g.ball.collision(this)) {
+            this.collision(this.g.ball);
+        }
+
     }
 
     move(dir) {
@@ -612,24 +628,32 @@ class Paddle extends Rectangle {
         }
     }
 
+    translate(x, y) {
+        let halfWid = this.width / 2;
+        if (x < halfWid) {
+            x = halfWid;
+        } else if (x > this.g.p.width - halfWid) {
+            x = this.g.p.width - halfWid;
+        }
+        if (0 <= this.p1.x && this.p2.x <= this.g.p.width) {
+            this.setPosition(new Vector(x - halfWid, y));
+        }
+    }
+
     collision(ball) {
-        if (this.p1.y - ball.pos.y > 2 * ball.r) {
-            return;
-        }
+        let collide = false;
         if (ball.pos.x > this.p1.x && ball.pos.x < this.p2.x) {
-            if (ball.pos.y + ball.r > this.p1.y && ball.pos.y - ball.r < this.p2.y) {
-                // center of paddle
-                let disp = ball.pos.x - this.p1.x;
-                let angle = this.g.p.map(disp, 0, this.width, -Math.PI, 0);
-                ball.vel.direction = angle;
-                console.log('Collided in center of paddle.');
-            }
+            // center of paddle
+            let disp = ball.pos.x - this.p1.x;
+            let angle = this.g.p.map(disp, 0, this.width, -Math.PI, 0);
+            ball.vel.direction = angle;
+            collide = true;
         } else if (ball.pos.x + ball.r > this.p1.x && ball.pos.x - ball.r < this.p2.x) {
-            if (ball.pos.y > this.p1.y && ball.pos.y < this.p2.y) {
-                // corners
-                ball.pos.x > this.x ? ball.vel.direction = 45 : ball.vel.direction = 135;
-            }
+            // corners
+            ball.pos.x > this.x ? ball.vel.direction = 45 : ball.vel.direction = 135;
+            collide = true;
         }
+        return collide;
     }
 
     draw() {
