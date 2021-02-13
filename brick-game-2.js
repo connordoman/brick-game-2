@@ -60,6 +60,16 @@ const BRICK_GAME = function (p) {
         this.ball.draw();
         this.brickSet.draw();
         this.paddle.draw();
+
+
+        // move paddle with mouse
+        if (p.mouseIsPressed) {
+            if (p.mouseY > this.gridSize * 28) {
+                let halfPaddle = this.paddle.width / 2;
+                let xDisp = p.map(p.mouseX, 0, p.width, 0, p.width - this.paddle.width);
+                this.paddle.setPosition(new Vector(xDisp, this.paddle.p1.y));
+            }
+        }
     };
 
     p.keyTyped = () => {
@@ -586,13 +596,20 @@ class Paddle extends Rectangle {
     }
 
     update() {
-        if (this.p1.x >= this.vel.x && this.g.p.keyIsDown(this.g.p.LEFT_ARROW)) {
-            this.setPosition(this.p1.left(this.vel));
-        } else if (this.p2.x + this.vel.x <= this.g.p.width && this.g.p.keyIsDown(this.g.p.RIGHT_ARROW)) {
-            this.setPosition(this.p1.right(this.vel));
+        if (this.g.p.keyIsDown(this.g.p.LEFT_ARROW)) {
+            this.move(-1);
+        } else if (this.g.p.keyIsDown(this.g.p.RIGHT_ARROW)) {
+            this.move(1);
         }
-
         this.collision(this.g.ball);
+    }
+
+    move(dir) {
+        dir = dir / Math.abs(dir);
+        let xDisp = dir * this.vel.x;
+        if (this.p1.x + xDisp >= 0 && this.p2.x + xDisp <= this.g.p.width) {
+            this.setPosition(this.p1.add(new Vector(xDisp, this.vel.y)));
+        }
     }
 
     collision(ball) {
