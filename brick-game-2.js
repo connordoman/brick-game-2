@@ -17,13 +17,14 @@ const BRICK_GAME = function (p) {
     };
 
     p.setup = () => {
+        this.setupDomElements();
         this.gridSize = 16;
         this.unitsX = 9;
         this.unitsY = 16;
         this.score = 0;
-        this.paused = false;
         this.level = 0;
         this.p = p;
+        this.paused = true;
 
         // p5 preparation
         p.frameRate(60);
@@ -33,12 +34,9 @@ const BRICK_GAME = function (p) {
 
         // Game objects
         this.ball = new Ball(this, this.unitsX * this.gridSize, this.unitsY * this.gridSize, 8);
+        this.ball.reset();
         this.paddle = new Paddle(this);
         this.levelUp();
-
-        this.ball.setVelocity(new Vector(0, 5));
-
-        this.paused = false;
     };
 
     p.draw = () => {
@@ -60,9 +58,9 @@ const BRICK_GAME = function (p) {
         this.drawGameInfo();
 
         // draw objects
+        this.paddle.draw();
         this.ball.draw();
         this.brickSet.draw();
-        this.paddle.draw();
     };
 
     p.keyTyped = () => {
@@ -127,8 +125,10 @@ const BRICK_GAME = function (p) {
         this.paused = !this.paused;
         if (this.paused) {
             p.noLoop();
+            this.buttonPause.innerHTML = 'Play';
         } else if (!this.paused) {
             p.loop();
+            this.buttonPause.innerHTML = 'Pause';
         }
     };
 
@@ -141,7 +141,16 @@ const BRICK_GAME = function (p) {
         this.ball.pos = new Vector(this.unitsX * this.gridSize, this.unitsY * this.gridSize);
         this.ball.vel = new Vector(0, 5);
         this.level++;
+        this.pause();
     };
+
+    this.setupDomElements = () => {
+        // play-pause
+        this.buttonPause = document.querySelector('#pause-play');
+        this.buttonPause.addEventListener('click', () => {
+            this.pause();
+        });
+    }
 }
 
 class Vector {
@@ -453,9 +462,13 @@ class Ball extends Circle {
             this.vel.y *= -1;
             this.pos.y = this.g.gridSize * 2 + this.r;
         } else if (this.pos.y - this.r >= this.g.p.height) {
-            this.pos = new Vector(this.g.unitsX * this.g.gridSize, 8 * this.g.gridSize);
-            this.vel = new Vector(0, 5);
+            this.reset();
         }
+    }
+
+    reset() {
+        this.pos = new Vector(this.g.unitsX * this.g.gridSize, this.g.unitsY * this.g.gridSize);
+        this.vel = new Vector(0, 5);
     }
 
     collision(rect) {
@@ -702,13 +715,13 @@ class Paddle extends Rectangle {
         } else if (this.g.p.keyIsDown(this.g.p.RIGHT_ARROW)) {
             this.move(1);
         } else if (this.g.p.mouseIsPressed) {
-            if (this.g.p.mouseY > this.g.gridSize * 28) {
+            if (this.g.p.mouseY > this.g.gridSize * 28 && this.g.p.mouseY <= this.g.p.height + this.g.gridSize) {
                 this.translate(this.g.p.mouseX, this.p1.y);
             }
         }
-        if (this.g.ball.collision(this)) {
-            this.collision(this.g.ball);
-        }
+        //if (this.g.ball.collision(this)) {
+        this.collision(this.g.ball);
+        //}
 
     }
 
@@ -734,12 +747,15 @@ class Paddle extends Rectangle {
 
     collision(ball) {
         let collide = false;
-        if (ball.pos.x - ball.r > this.p1.x && ball.pos.x + ball.r < this.p2.x) {
-            // center of paddle
-            let disp = ball.pos.x - this.p1.x;
-            let angle = this.g.p.map(disp, 0, this.width, -Math.PI, 0);
-            ball.vel.direction = angle;
-            collide = true;
+        if (ball.pos.x + ball.r > this.p1.x && ball.pos.x - ball.r < this.p2.x) {
+            if (ball.pos.y + ball.r >= this.p1.y && ball.pos.y < this.p2.y) {
+                // center of paddle
+                let disp = ball.pos.x - this.p1.x;
+                let angle = this.g.p.map(disp, -ball.r, this.width + ball.r, -Math.PI, 0);
+                ball.vel.direction = angle;
+                collide = true;
+
+            }
         }
         return collide;
     }

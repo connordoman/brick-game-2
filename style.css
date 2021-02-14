@@ -14,8 +14,11 @@ body {
     font-size: 10pt;
 }
 
-#gamearea {
+#content {
     text-align: center;
+}
+
+#gamearea {
     padding: 1em 0;
 }
 
@@ -23,7 +26,30 @@ body {
     border: 1px solid white;
 }
 
+#pause-play {
+    height: 3em;
+    width: 10em;
+    border-radius: 1em;
+    border: none;
+    font-size: 1em;
+    text-transform: capitalize;
+    cursor: pointer;
+    background: #ffffff;
+    font-family: "Arcade", sans-serif;
+}
+
+#pause-play:hover {
+    background: #dedede;
+}
+
+#pause-play:active {
+    background: #aaaaaa;
+}
+
 .contact {
+    position: fixed;
+    bottom: 0.5em;
+    left: 1em;
     text-align: center;
 }
 
