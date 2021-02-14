@@ -140,6 +140,7 @@ const BRICK_GAME = function (p) {
         this.brickSet.startingScore = this.score;
         this.ball.pos = new Vector(this.unitsX * this.gridSize, this.unitsY * this.gridSize);
         this.ball.vel = new Vector(0, 5);
+        this.paddle.reset();
         this.level++;
         this.pause();
     };
@@ -766,6 +767,10 @@ class Paddle extends Rectangle {
         this.g.p.rect(this.x, this.y, this.width, this.height, this.g.gridSize / 4);
         this.g.p.fill(0);
         this.g.p.triangle(this.x + this.indicator.p1.x, this.y + this.indicator.p1.y, this.x + this.indicator.p2.x, this.y + this.indicator.p2.y, this.x + this.indicator.p3.x, this.y + this.indicator.p3.y);
+    }
+
+    reset() {
+        this.translate(this.g.p.width / 2, this.p1.y);
     }
 }
 
