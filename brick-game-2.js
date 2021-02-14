@@ -7,7 +7,7 @@
  */
 const P5_LOCATION = 'https://connordoman.com/res/p5/p5.js';
 
-const DEBUG = true;
+const DEBUG = false;
 
 
 const BRICK_GAME = function (p) {
@@ -51,10 +51,9 @@ const BRICK_GAME = function (p) {
 
         // update objects
         if (this.lives > 0) {
+            this.paddle.update();
             this.ball.update();
             this.brickSet.update();
-            this.paddle.update();
-            this.ball.screenCollide();
         }
 
         // draw hud
@@ -121,6 +120,15 @@ const BRICK_GAME = function (p) {
         p.strokeWeight(1);
         p.line(0, this.gridSize * 2, p.width, this.gridSize * 2);
 
+        //
+        if (this.paused) {
+            p.noLoop();
+            this.buttonPause.innerHTML = 'Play';
+        } else if (!this.paused) {
+            p.loop();
+            this.buttonPause.innerHTML = 'Pause';
+        }
+
         // score
         p.noStroke();
         p.fill(255);
@@ -164,12 +172,8 @@ const BRICK_GAME = function (p) {
 
     this.pause = () => {
         this.paused = !this.paused;
-        if (this.paused) {
-            p.noLoop();
-            this.buttonPause.innerHTML = 'Play';
-        } else if (!this.paused) {
-            p.loop();
-            this.buttonPause.innerHTML = 'Pause';
+        if (!this.paused) {
+            p.draw();
         }
     };
 
@@ -184,12 +188,10 @@ const BRICK_GAME = function (p) {
         this.log(lvl);
         this.brickSet = new BrickGroup(this, lvl);
         this.brickSet.startingScore = this.score;
-        this.ball.pos = new Vector(this.unitsX * this.gridSize, this.unitsY * this.gridSize);
-        this.ball.vel = new Vector(0, 5);
+        this.ball.reset();
         this.paddle.reset();
         this.level++;
         this.pauseExplicit(true);
-        p.draw();
     };
 
     this.setupDomElements = () => {
@@ -502,6 +504,7 @@ class Ball extends Circle {
         }
 
         //this.bounds.setPosition(this.pos);
+        this.screenCollide();
     }
 
     draw() {
@@ -808,7 +811,7 @@ BrickGroup.layouts = {
         [1, 1, 0, 0, 0, 0, 0, 1, 1],
         [0, 1, 1, 1, 1, 1, 1, 1, 0]
     ],
-    filterLayout: [
+    basicFilterLayout: [
         [1, 0, 0, 1, 0, 1, 0, 0, 1],
         [0, 1, 1, 1, 0, 1, 1, 1, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 0],
