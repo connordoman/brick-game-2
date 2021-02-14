@@ -67,6 +67,11 @@ const BRICK_GAME = function (p) {
         if (p.key === ' ') {
             this.pause();
         }
+        if (DEBUG) {
+            if (p.key === 'l') {
+                this.levelUp();
+            }
+        }
     };
 
     p.windowResized = () => {
@@ -132,6 +137,11 @@ const BRICK_GAME = function (p) {
         }
     };
 
+    this.pauseExplicit = (pause) => {
+        this.paused = !pause;
+        this.pause();
+    };
+
     this.levelUp = () => {
         let layouts = Object.keys(BrickGroup.layouts);
         let lvl = BrickGroup.layouts[layouts[this.level % layouts.length]];
@@ -142,7 +152,8 @@ const BRICK_GAME = function (p) {
         this.ball.vel = new Vector(0, 5);
         this.paddle.reset();
         this.level++;
-        this.pause();
+        this.pauseExplicit(true);
+        p.draw();
     };
 
     this.setupDomElements = () => {
@@ -182,6 +193,22 @@ class Vector {
         let mag = this.magnitude;
         this.x = Math.cos(angle) * mag;
         this.y = Math.sin(angle) * mag;
+    }
+
+    get directionX() {
+        if (this.x === 0) {
+            return 1;
+        } else {
+            return this.x / Math.abs(this.x);
+        }
+    }
+
+    get directionY() {
+        if (this.y === 0) {
+            return 1;
+        } else {
+            return this.y / Math.abs(this.y);
+        }
     }
 
     get degrees() {
@@ -266,6 +293,8 @@ class Vector {
     parity() {
         return (this.x * this.y) / Math.abs(this.x * this.y);
     }
+
+
 
     dist(v) {
         let dx = this.x - v.x;
@@ -489,15 +518,15 @@ class Ball extends Circle {
                 distMag = 1;
             }
             let distToMove = distMag - this.r;
-            let theta = this.vel.angle(dist.rotate(-Math.PI / 2));
+            let theta = this.vel.angle(dist.rotate(Math.PI / 2));
             let dispX = 0;
             let dispY = 0;
 
-            dispX = Math.cos(theta) * distToMove;
-            dispY = Math.sin(theta) * distToMove;
+            dispX = Math.cos(theta) * distToMove * dist.directionX;
+            dispY = Math.sin(theta) * distToMove * dist.directionY;
 
-            this.pos.x += dispX;
-            this.pos.y += dispY;
+            this.pos.x -= dispX;
+            this.pos.y -= dispY;
 
             this.g.log(dist.toString());
 
@@ -539,12 +568,27 @@ class Ball extends Circle {
 }
 
 class Brick extends Rectangle {
-    constructor(g, x, y) {
+    constructor(g, x, y, type) {
         super(new Vector(x, y), 2 * g.gridSize, g.gridSize);
         this.g = g;
         this.destroyed = false;
         this.g.p.colorMode(this.g.p.HSB);
-        this.color = this.g.p.color(this.g.p.map(x, 0, 18 * g.gridSize, 0, 360), this.g.p.map(y, 0, 16 * g.gridSize, 75, 0), 90);
+        if (type) {
+            this.type = type;
+        } else {
+            this.type = 1;
+        }
+        this.determineColor();
+    }
+
+    determineColor() {
+        if (this.type === Brick.types.standard) {
+            // rainbow color
+            this.color = this.g.p.color(this.g.p.map(this.p1.x, 0, 18 * this.g.gridSize, 0, 360), this.g.p.map(this.p1.y, 0, 16 * this.g.gridSize, 75, 0), 90);
+        } else if (this.type === Brick.types.concrete) {
+            // concrete color
+            this.color = this.g.p.color(0, 0, 80);
+        }
     }
 
     update() {
@@ -565,11 +609,28 @@ class Brick extends Rectangle {
         }
     }
 
+    collision(ball) {
+        let collide = ball.collision(this);
+        if (collide) {
+            if (this.type === Brick.types.standard) {
+                window.setTimeout(this.destroyed = true, 100);
+                this.g.score++;
+            }
+        }
+        return collide;
+    }
+
     toString() {
         let str = `Brick: ${this.center.toString()}\n\tdestroyed: ${this.destroyed}`;
         return str;
     }
 }
+
+Brick.types = {
+    air: 0,
+    standard: 1,
+    concrete: 2
+};
 
 class BrickGroup {
     constructor(g, layout) {
@@ -583,9 +644,8 @@ class BrickGroup {
             for (let y = 0; y < layout.length; y++) {
                 for (let x = 0; x < layout[y].length; x++) {
                     let val = layout[y][x];
-                    //alert(`Brick is a: ${val}`)
-                    if (val === 1) {
-                        this.add(new Brick(this.g, this.pos.x + x * 2 * g.gridSize, this.pos.y + y * g.gridSize));
+                    if (val > 0) {
+                        this.add(new Brick(this.g, this.pos.x + x * 2 * g.gridSize, this.pos.y + y * g.gridSize, val));
                     }
                 }
             }
@@ -617,10 +677,7 @@ class BrickGroup {
         }
 
         if (nearest) {
-            if (this.g.ball.collision(nearest)) {
-                window.setTimeout(nearest.destroyed = true, 100);
-                this.g.score++;
-
+            if (nearest.collision(this.g.ball)) {
                 if (this.score + this.startingScore === this.g.score) {
                     this.g.levelUp();
                 }
@@ -641,7 +698,9 @@ class BrickGroup {
     add(brick) {
         if (!this.contains(brick)) {
             this.bricks.push(brick);
-            this.score++;
+            if (brick.type !== Brick.types.concrete) {
+                this.score++;
+            }
         }
     }
 
@@ -699,6 +758,22 @@ BrickGroup.layouts = {
         [1, 1, 1, 0, 0, 0, 0, 0, 1],
         [1, 1, 0, 1, 1, 1, 1, 1, 1],
         [1, 1, 1, 1, 1, 1, 1, 1, 1]
+    ],
+    smileLayout: [
+        [0, 0, 1, 0, 0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 1, 0, 0, 0, 0, 0, 1, 1],
+        [0, 1, 1, 1, 1, 1, 1, 1, 0]
+    ],
+    filterLayout: [
+        [1, 0, 0, 1, 0, 1, 0, 0, 1],
+        [0, 1, 1, 1, 0, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [2, 0, 0, 2, 0, 2, 0, 0, 2]
     ]
 };
 
@@ -754,8 +829,8 @@ class Paddle extends Rectangle {
                 let disp = ball.pos.x - this.p1.x;
                 let angle = this.g.p.map(disp, -ball.r, this.width + ball.r, -Math.PI, 0);
                 ball.vel.direction = angle;
+                ball.pos.y = this.p1.y - ball.r;
                 collide = true;
-
             }
         }
         return collide;
