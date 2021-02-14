@@ -7,7 +7,7 @@
  */
 const P5_LOCATION = 'https://connordoman.com/res/p5/p5.js';
 
-const DEBUG = false;
+const DEBUG = true;
 
 
 const BRICK_GAME = function (p) {
@@ -23,6 +23,7 @@ const BRICK_GAME = function (p) {
         this.unitsY = 16;
         this.score = 0;
         this.level = 0;
+        this.lives = 3;
         this.p = p;
         this.paused = true;
 
@@ -49,17 +50,21 @@ const BRICK_GAME = function (p) {
         }
 
         // update objects
-        this.ball.update();
-        this.brickSet.update();
-        this.paddle.update();
-        this.ball.screenCollide();
+        if (this.lives > 0) {
+            this.ball.update();
+            this.brickSet.update();
+            this.paddle.update();
+            this.ball.screenCollide();
+        }
 
         // draw hud
         this.drawGameInfo();
 
         // draw objects
         this.paddle.draw();
-        this.ball.draw();
+        if (this.lives > 0) {
+            this.ball.draw();
+        }
         this.brickSet.draw();
     };
 
@@ -78,6 +83,20 @@ const BRICK_GAME = function (p) {
         //let res = scaleResolution(9 * GRID_SIZE, 16 * GRID_SIZE);
         //p.resizeCanvas(res.w, res.h);
     };
+
+    this.initialize = () => {
+        this.score = 0;
+        this.level = 0;
+        this.lives = 3;
+        this.p = p;
+        this.paused = true;
+
+        // Game objects
+        this.ball = new Ball(this, this.unitsX * this.gridSize, this.unitsY * this.gridSize, 8);
+        this.ball.reset();
+        this.paddle = new Paddle(this);
+        this.levelUp();
+    }
 
     this.scaleResolution = (unitsX, unitsY) => {
         let scrRatio = p.windowWidth / p.windowHeight;
@@ -112,6 +131,23 @@ const BRICK_GAME = function (p) {
         // level
         p.textAlign(p.RIGHT, p.CENTER);
         p.text(`Lv:${this.level.toString().padStart(2, '0')}`, p.width - this.gridSize / 2, this.gridSize);
+
+        // game over
+        if (this.lives <= 0) {
+            p.textSize(this.gridSize);
+            p.textAlign(p.CENTER, p.CENTER);
+            p.text('Game Over', p.width / 2, p.height / 2);
+            this.buttonPause.innerHTML = 'Restart';
+        }
+
+        // lives
+        p.noFill();
+        p.stroke(255);
+        p.strokeWeight(1);
+        for (let i = 0; i < this.lives; i++) {
+            p.circle((this.gridSize) + (i * gridSize * 1.5), p.height - this.gridSize, this.ball.r);
+        }
+
     }
 
     this.log = (obj) => {
@@ -161,6 +197,9 @@ const BRICK_GAME = function (p) {
         this.buttonPause = document.querySelector('#pause-play');
         this.buttonPause.addEventListener('click', () => {
             this.pause();
+            if (this.lives <= 0) {
+                this.initialize();
+            }
         });
     }
 }
@@ -492,6 +531,7 @@ class Ball extends Circle {
             this.vel.y *= -1;
             this.pos.y = this.g.gridSize * 2 + this.r;
         } else if (this.pos.y - this.r >= this.g.p.height) {
+            this.g.lives--;
             this.reset();
         }
     }
