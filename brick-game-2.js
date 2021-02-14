@@ -289,6 +289,10 @@ class Vector {
         turn.direction += angle;
         return turn;
     }
+
+    distance(v) {
+        return Math.pow(this.x - v.x, 2) + Math.pow(this.y - v.y);
+    }
 }
 
 class Rectangle {
@@ -586,19 +590,29 @@ class BrickGroup {
 
     update() {
         let br;
+        let nearest;
+        let distSq = 0;
         for (let i = 0; i < this.size; i++) {
             br = this.get(i);
             if (br) {
-                if (this.g.ball.collision(br)) {
-                    window.setTimeout(br.destroyed = true, 50);
-                    this.g.score++;
-
-                    if (this.score + this.startingScore === this.g.score) {
-                        this.g.levelUp();
-                    }
+                distSq = br.center.sub(this.g.ball.pos).distanceSq;
+                if (!nearest || distSq < nearest.center.sub(this.g.ball.pos).distanceSq) {
+                    nearest = br;
                 }
             }
         }
+
+        if (nearest) {
+            if (this.g.ball.collision(nearest)) {
+                window.setTimeout(nearest.destroyed = true, 100);
+                this.g.score++;
+
+                if (this.score + this.startingScore === this.g.score) {
+                    this.g.levelUp();
+                }
+            }
+        }
+
     }
 
     draw() {
