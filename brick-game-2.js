@@ -7,7 +7,7 @@
  */
 const P5_LOCATION = 'https://connordoman.com/res/p5/p5.js';
 
-const DEBUG = true;
+const DEBUG = false;
 
 
 const BRICK_GAME = function (p) {
@@ -22,6 +22,7 @@ const BRICK_GAME = function (p) {
         this.unitsY = 16;
         this.score = 0;
         this.paused = false;
+        this.level = 0;
         this.p = p;
 
         // p5 preparation
@@ -31,11 +32,9 @@ const BRICK_GAME = function (p) {
         p.textFont(this.font);
 
         // Game objects
-        this.ball = new Ball(this, this.unitsX * this.gridSize, 8 * this.gridSize, 8);
-        this.brickSet = new BrickGroup(this, BrickGroup.gridLayout);
+        this.ball = new Ball(this, this.unitsX * this.gridSize, this.unitsY * this.gridSize, 8);
         this.paddle = new Paddle(this);
-
-        this.brickSet.translate(0, 2 * this.gridSize);
+        this.levelUp();
 
         this.ball.setVelocity(new Vector(0, 5));
 
@@ -106,6 +105,10 @@ const BRICK_GAME = function (p) {
         p.textAlign(p.LEFT, p.CENTER);
         p.textSize(this.gridSize * 3 / 4);
         p.text(`Score: ${this.score}`, this.gridSize / 2, this.gridSize);
+
+        // level
+        p.textAlign(p.RIGHT, p.CENTER);
+        p.text(`Lv:${this.level.toString().padStart(2, '0')}`, p.width - this.gridSize / 2, this.gridSize);
     }
 
     this.log = (obj) => {
@@ -127,7 +130,18 @@ const BRICK_GAME = function (p) {
         } else if (!this.paused) {
             p.loop();
         }
-    }
+    };
+
+    this.levelUp = () => {
+        let layouts = Object.keys(BrickGroup.layouts);
+        let lvl = BrickGroup.layouts[layouts[this.level % layouts.length]];
+        this.log(lvl);
+        this.brickSet = new BrickGroup(this, lvl);
+        this.brickSet.startingScore = this.score;
+        this.ball.pos = new Vector(this.unitsX * this.gridSize, this.unitsY * this.gridSize);
+        this.ball.vel = new Vector(0, 5);
+        this.level++;
+    };
 }
 
 class Vector {
@@ -544,6 +558,8 @@ class BrickGroup {
         this.g = g;
         this.bricks = [];
         this.score = 0;
+        this.pos = new Vector(0, 2 * this.g.gridSize);
+        this.startingScore = 0;
         if (Array.isArray(layout)) {
             // custom layouts
             for (let y = 0; y < layout.length; y++) {
@@ -551,18 +567,17 @@ class BrickGroup {
                     let val = layout[y][x];
                     //alert(`Brick is a: ${val}`)
                     if (val === 1) {
-                        this.add(new Brick(this.g, x * 2 * g.gridSize, y * g.gridSize));
+                        this.add(new Brick(this.g, this.pos.x + x * 2 * g.gridSize, this.pos.y + y * g.gridSize));
                     }
                 }
             }
         } else if (typeof layout === 'number') {
             // default row of one
             for (let i = 0; i < layout; i++) {
-                this.add(new Brick(this.g, i + (i % 9) * 2 * g.GRID_SIZE, i + (i / 9) * g.GRID_SIZE));
+                this.add(new Brick(this.g, this.pos.x + (i % 9) * 2 * g.GRID_SIZE, this.pos.y + i + (i / 9) * g.GRID_SIZE));
             }
         }
         this.g.log(this.toString());
-        this.pos = new Vector(0, 0);
     }
 
     get size() {
@@ -578,8 +593,8 @@ class BrickGroup {
                     window.setTimeout(br.destroyed = true, 50);
                     this.g.score++;
 
-                    if (this.score === this.g.score) {
-                        this.g.pause();
+                    if (this.score + this.startingScore === this.g.score) {
+                        this.g.levelUp();
                     }
                 }
             }
@@ -638,11 +653,26 @@ class BrickGroup {
     }
 }
 
-BrickGroup.gridLayout = [
-    [1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [0, 1, 0, 1, 0, 1, 0, 1, 0],
-    [1, 1, 1, 1, 1, 1, 1, 1, 1]
-];
+BrickGroup.layouts = {
+    fenceLayout: [
+        [1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 1, 0, 1, 0, 1, 0, 1, 0],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1]
+    ],
+    gridLayout: [
+        [0, 1, 0, 1, 0, 1, 0, 1, 0],
+        [1, 0, 1, 0, 1, 0, 1, 0, 1],
+        [0, 1, 0, 1, 0, 1, 0, 1, 0],
+        [1, 0, 1, 0, 1, 0, 1, 0, 1]
+    ],
+    ryanSpecialLayout: [
+        [1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 0, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 0, 0, 0, 0, 0, 1],
+        [1, 1, 0, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1]
+    ]
+};
 
 class Paddle extends Rectangle {
     constructor(g) {
