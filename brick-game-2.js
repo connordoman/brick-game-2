@@ -7,7 +7,7 @@
  */
 const P5_LOCATION = 'https://connordoman.com/res/p5/p5.js';
 
-const DEBUG = true;
+const DEBUG = false;
 
 
 const BRICK_GAME = function (p) {
@@ -73,11 +73,21 @@ const BRICK_GAME = function (p) {
         if (p.key === ' ') {
             this.togglePause();
         }
+        if (p.key === 'q') {
+            this.togglePause();
+            if (this.paused) {
+                p.noLoop();
+            } else {
+                p.loop();
+            }
+        }
         if (DEBUG) {
             if (p.key === 'l') {
                 this.levelUp();
             }
         }
+
+        return false;
     };
 
     p.windowResized = () => {
