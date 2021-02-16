@@ -7,7 +7,7 @@
  */
 const P5_LOCATION = 'https://connordoman.com/res/p5/p5.js';
 
-const DEBUG = false;
+const DEBUG = true;
 
 
 const BRICK_GAME = function (p) {
@@ -51,9 +51,11 @@ const BRICK_GAME = function (p) {
 
         // update objects
         if (this.lives > 0) {
-            this.paddle.update();
-            this.ball.update();
             this.brickSet.update();
+            if (!this.paused) {
+                this.ball.update();
+                this.paddle.update();
+            }
         }
 
         // draw hud
@@ -69,7 +71,7 @@ const BRICK_GAME = function (p) {
 
     p.keyTyped = () => {
         if (p.key === ' ') {
-            this.pause();
+            this.togglePause();
         }
         if (DEBUG) {
             if (p.key === 'l') {
@@ -122,10 +124,10 @@ const BRICK_GAME = function (p) {
 
         //
         if (this.paused) {
-            p.noLoop();
+            //p.noLoop();
             this.buttonPause.innerHTML = 'Play';
         } else if (!this.paused) {
-            p.loop();
+            //p.loop();
             this.buttonPause.innerHTML = 'Pause';
         }
 
@@ -171,11 +173,22 @@ const BRICK_GAME = function (p) {
     };
 
     this.pause = () => {
-        this.paused = !this.paused;
-        if (!this.paused) {
-            p.draw();
-        }
+        this.paused = true;
+        p.draw();
     };
+
+    this.play = () => {
+        this.paused = false;
+        p.draw();
+    }
+
+    this.togglePause = () => {
+        if (this.paused) {
+            this.play();
+        } else {
+            this.pause();
+        }
+    }
 
     this.pauseExplicit = (pause) => {
         this.paused = !pause;
@@ -191,14 +204,14 @@ const BRICK_GAME = function (p) {
         this.ball.reset();
         this.paddle.reset();
         this.level++;
-        this.pauseExplicit(true);
+        this.pause();
     };
 
     this.setupDomElements = () => {
         // play-pause
         this.buttonPause = document.querySelector('#pause-play');
         this.buttonPause.addEventListener('click', () => {
-            this.pause();
+            this.togglePause();
             if (this.lives <= 0) {
                 this.initialize();
             }
@@ -626,7 +639,7 @@ class Brick extends Rectangle {
 
     determineColor() {
         if (this.type === Brick.types.standard) {
-            // rainbow color
+            // gridspace color
             this.color = this.g.p.color(this.g.p.map(this.p1.x, 0, 18 * this.g.gridSize, 0, 360), this.g.p.map(this.p1.y, 0, 16 * this.g.gridSize, 75, 0), 90);
         } else if (this.type === Brick.types.concrete) {
             // concrete color
@@ -642,6 +655,11 @@ class Brick extends Rectangle {
     draw() {
         this.g.p.strokeWeight(1);
         this.g.p.stroke(255);
+        // this type is dynamically colored
+        if (this.type === Brick.types.special) {
+            const delay = 5000; // ms
+            this.color = this.g.p.color((this.g.p.map(this.g.p.millis() % delay, 0, delay, 0, 360) + 240) % 360, 100, 100);
+        }
         this.g.p.fill(this.color);
         this.g.p.rect(this.x, this.y, this.width, this.height);
 
@@ -654,10 +672,16 @@ class Brick extends Rectangle {
 
     collision(ball) {
         let collide = ball.collision(this);
-        if (collide) {
+        if (collide && this.type !== Brick.types.concrete) {
             if (this.type === Brick.types.standard) {
-                window.setTimeout(this.destroyed = true, 100);
                 this.g.score++;
+            }
+            if (this.type === Brick.types.special) {
+                this.g.score += 10;
+            }
+            window.setTimeout(this.destroyed = true, 100);
+            if (this.g.score % 100 === 0) {
+                this.g.lives++;
             }
         }
         return collide;
@@ -672,7 +696,8 @@ class Brick extends Rectangle {
 Brick.types = {
     air: 0,
     standard: 1,
-    concrete: 2
+    concrete: 2,
+    special: 3
 };
 
 class BrickGroup {
@@ -741,8 +766,11 @@ class BrickGroup {
     add(brick) {
         if (!this.contains(brick)) {
             this.bricks.push(brick);
-            if (brick.type !== Brick.types.concrete) {
+            if (brick.type === Brick.types.standard) {
                 this.score++;
+            }
+            if (brick.type === Brick.types.special) {
+                this.score += 10;
             }
         }
     }
@@ -817,6 +845,16 @@ BrickGroup.layouts = {
         [0, 0, 0, 0, 0, 0, 0, 0, 0],
         [1, 1, 1, 1, 1, 1, 1, 1, 1],
         [2, 0, 0, 2, 0, 2, 0, 0, 2]
+    ],
+    alienLayout: [
+        [0, 0, 0, 0, 1, 0, 0, 0, 0],
+        [0, 0, 0, 1, 1, 1, 0, 0, 0],
+        [0, 0, 1, 3, 1, 3, 1, 0, 0],
+        [0, 0, 1, 1, 1, 1, 1, 0, 0],
+        [0, 0, 1, 1, 1, 1, 1, 0, 0],
+        [0, 0, 0, 1, 0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 1, 0, 1, 0, 0],
+        [0, 1, 0, 1, 0, 1, 0, 1, 0]
     ]
 };
 
@@ -841,7 +879,6 @@ class Paddle extends Rectangle {
         //if (this.g.ball.collision(this)) {
         this.collision(this.g.ball);
         //}
-
     }
 
     move(dir) {
