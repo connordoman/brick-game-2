@@ -7,7 +7,7 @@
  */
 const P5_LOCATION = 'https://connordoman.com/res/p5/p5.js';
 
-const DEBUG = false;
+const DEBUG = true;
 
 
 const BRICK_GAME = function (p) {
@@ -226,6 +226,18 @@ const BRICK_GAME = function (p) {
                 this.initialize();
             }
         });
+        // level-up
+        this.lvlUp = document.getElementById('lvl-up');
+        this.lvlUp.innerHTML = 'Level Up';
+        this.lvlUp.style.backgroundColor = '#ff33aa';
+        if (DEBUG) {
+            this.lvlUp.style.display = 'inline-block';
+        }
+        this.lvlUp.addEventListener('click', () => {
+            if (DEBUG) {
+                this.levelUp();
+            }
+        });
     }
 }
 
@@ -357,8 +369,6 @@ class Vector {
     parity() {
         return (this.x * this.y) / Math.abs(this.x * this.y);
     }
-
-
 
     dist(v) {
         let dx = this.x - v.x;
@@ -583,16 +593,16 @@ class Ball extends Circle {
                 dist.magnitude = 1;
                 distMag = 1;
             }
-            let distToMove = distMag - this.r;
+            let distToMove = distMag - (this.r);
             let theta = this.vel.angle(dist.rotate(Math.PI / 2));
             let dispX = 0;
             let dispY = 0;
 
-            dispX = Math.cos(theta) * distToMove * dist.directionX;
-            dispY = Math.sin(theta) * distToMove * dist.directionY;
+            dispX = Math.cos(theta) * distToMove * this.vel.directionX;
+            dispY = Math.sin(theta) * distToMove * this.vel.directionY;
 
-            this.pos.x -= dispX;
-            this.pos.y -= dispY;
+            this.pos.x += dispX;
+            this.pos.y += dispY;
 
             this.g.log(dist.toString());
 
@@ -865,6 +875,18 @@ BrickGroup.layouts = {
         [0, 0, 0, 1, 0, 1, 0, 0, 0],
         [0, 0, 1, 0, 1, 0, 1, 0, 0],
         [0, 1, 0, 1, 0, 1, 0, 1, 0]
+    ],
+    squidLayout: [
+        [0, 0, 0, 1, 1, 1, 0, 0, 0],
+        [0, 0, 1, 1, 1, 1, 1, 0, 0],
+        [0, 1, 1, 1, 1, 1, 1, 1, 0],
+        [0, 1, 1, 3, 1, 3, 1, 1, 0],
+        [0, 1, 1, 3, 2, 3, 1, 1, 0],
+        [0, 0, 1, 1, 2, 1, 1, 0, 0],
+        [0, 0, 0, 2, 2, 2, 0, 0, 0],
+        [0, 1, 1, 2, 2, 2, 1, 1, 0],
+        [0, 1, 1, 2, 2, 2, 1, 1, 0],
+        [0, 0, 0, 0, 2, 0, 0, 0, 0]
     ]
 };
 

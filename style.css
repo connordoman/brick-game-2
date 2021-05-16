@@ -26,7 +26,11 @@ body {
     border: 1px solid white;
 }
 
-#pause-play {
+#lvl-up {
+    display: none;
+}
+
+.butt {
     height: 3em;
     width: 10em;
     border-radius: 1em;
@@ -38,11 +42,11 @@ body {
     font-family: "Arcade", sans-serif;
 }
 
-#pause-play:hover {
+.butt:hover {
     background: #dedede;
 }
 
-#pause-play:active {
+.butt:active {
     background: #aaaaaa;
 }
 
