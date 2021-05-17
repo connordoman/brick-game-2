@@ -248,17 +248,17 @@ const BRICK_GAME = function (p) {
             }
         });
         // level-up
-        this.lvlUp = document.getElementById('lvl-up');
-        this.lvlUp.innerHTML = 'Level Up';
-        this.lvlUp.style.backgroundColor = '#ff33aa';
         if (DEBUG) {
+            this.lvlUp = document.getElementById('lvl-up');
+            this.lvlUp.innerHTML = 'Level Up';
+            this.lvlUp.style.backgroundColor = '#ff33aa';
             this.lvlUp.style.display = 'inline-block';
+            this.lvlUp.addEventListener('click', () => {
+                if (DEBUG) {
+                    this.levelUp();
+                }
+            });
         }
-        this.lvlUp.addEventListener('click', () => {
-            if (DEBUG) {
-                this.levelUp();
-            }
-        });
     }
 }
 
@@ -614,7 +614,7 @@ class Ball extends Circle {
                 dist.magnitude = 1;
                 distMag = 1;
             }
-            let distToMove = distMag - (this.r);
+            let distToMove = distMag - (this.r) + this.vel.magnitude;
             let theta = this.vel.angle(dist.rotate(-Math.PI / 2));
             let dispX = 0;
             let dispY = 0;
@@ -624,7 +624,6 @@ class Ball extends Circle {
 
             this.pos.x += dispX - this.vel.x;
             this.pos.y += dispY - this.vel.y;
-            this.pos.add(this.vel);
 
             this.g.log(dist.toString());
 
