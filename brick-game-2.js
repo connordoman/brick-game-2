@@ -21,11 +21,6 @@ const BRICK_GAME = function (p) {
         this.gridSize = 16;
         this.unitsX = 9;
         this.unitsY = 16;
-        this.score = 0;
-        this.level = 0;
-        this.lives = 3;
-        this.p = p;
-        this.paused = true;
 
         // p5 preparation
         p.frameRate(60);
@@ -33,11 +28,7 @@ const BRICK_GAME = function (p) {
         cnv.parent('gamearea');
         p.textFont(this.font);
 
-        // Game objects
-        this.ball = new Ball(this, this.unitsX * this.gridSize, this.unitsY * this.gridSize, 8);
-        this.ball.reset();
-        this.paddle = new Paddle(this);
-        this.levelUp();
+        this.initialize();
     };
 
     p.draw = () => {
@@ -51,11 +42,11 @@ const BRICK_GAME = function (p) {
 
         // update objects
         if (this.lives > 0) {
-            this.brickSet.update();
             if (!this.paused) {
                 this.ball.update();
                 this.paddle.update();
             }
+            this.brickSet.update();
         }
 
         // draw hud
@@ -76,6 +67,10 @@ const BRICK_GAME = function (p) {
         if (p.key === 'q') {
             this.togglePause();
             if (this.paused) {
+                console.log('II Paused');
+                p.textAlign(p.RIGHT, p.CENTER);
+                p.fill(0, 0, 100)
+                p.text(`Elapsed time: `, p.width - this.gridSize, p.height - this.gridSize);
                 p.noLoop();
             } else {
                 p.loop();
@@ -88,6 +83,14 @@ const BRICK_GAME = function (p) {
         }
 
         return false;
+    };
+
+    p.mousePressed = () => {
+        p.noCursor();
+    };
+
+    p.mouseReleased = () => {
+        p.cursor();
     };
 
     p.windowResized = () => {
@@ -103,9 +106,18 @@ const BRICK_GAME = function (p) {
         this.paused = true;
 
         // Game objects
+        this.log('checking game data');
         this.ball = new Ball(this, this.unitsX * this.gridSize, this.unitsY * this.gridSize, 8);
         this.ball.reset();
         this.paddle = new Paddle(this);
+        let urlDataLvl = this.getURLVariable(window.location.href, 'lvl');
+        this.log(window.location.href);
+        if (DEBUG && urlDataLvl) {
+            this.log('lvl found');
+            this.level = Number(urlDataLvl) - 1;
+            this.log('inserted level: ' + urlDataLvl);
+            console.log(level);
+        }
         this.levelUp();
     }
 
@@ -169,6 +181,15 @@ const BRICK_GAME = function (p) {
         }
 
     }
+
+    this.getURLVariable = (urlStr, variable) => {
+        // set up url
+        let urlString = urlStr;
+        let url = new URL(urlString);
+        // get variables
+        let param = url.searchParams.get(variable);
+        return param;
+    };
 
     this.log = (obj) => {
         if (DEBUG) {
@@ -594,15 +615,16 @@ class Ball extends Circle {
                 distMag = 1;
             }
             let distToMove = distMag - (this.r);
-            let theta = this.vel.angle(dist.rotate(Math.PI / 2));
+            let theta = this.vel.angle(dist.rotate(-Math.PI / 2));
             let dispX = 0;
             let dispY = 0;
 
             dispX = Math.cos(theta) * distToMove * this.vel.directionX;
             dispY = Math.sin(theta) * distToMove * this.vel.directionY;
 
-            this.pos.x += dispX;
-            this.pos.y += dispY;
+            this.pos.x += dispX - this.vel.x;
+            this.pos.y += dispY - this.vel.y;
+            this.pos.add(this.vel);
 
             this.g.log(dist.toString());
 
@@ -649,12 +671,27 @@ class Brick extends Rectangle {
         this.g = g;
         this.destroyed = false;
         this.g.p.colorMode(this.g.p.HSB);
-        if (type) {
-            this.type = type;
+        this.determineType(type);
+        this.determineColor();
+    }
+
+    determineType(val) {
+        // half step checker
+        if (Math.abs(val) > 0) {
+            let modVal = val % 1;
+            if (modVal >= 0.5) {
+                this.halfBrick = (Math.abs(val) / val) * 0.5;
+            }
+        } else {
+            this.halfBrick = 0;
+        }
+
+        // type assignment
+        if (val) {
+            this.type = val;
         } else {
             this.type = 1;
         }
-        this.determineColor();
     }
 
     determineColor() {
@@ -664,6 +701,8 @@ class Brick extends Rectangle {
         } else if (this.type === Brick.types.concrete) {
             // concrete color
             this.color = this.g.p.color(0, 0, 80);
+        } else {
+            this.color = this.g.p.color(0, 0, 100);
         }
     }
 
@@ -678,7 +717,7 @@ class Brick extends Rectangle {
         // this type is dynamically colored
         if (this.type === Brick.types.special) {
             const delay = 5000; // ms
-            this.color = this.g.p.color((this.g.p.map(this.g.p.millis() % delay, 0, delay, 0, 360) + 240) % 360, 100, 100);
+            this.color = this.g.p.color((this.g.p.map(this.g.p.millis() % delay, 0, delay, 1, 360) + 240) % 360, 100, 100);
         }
         this.g.p.fill(this.color);
         this.g.p.rect(this.x, this.y, this.width, this.height);
@@ -727,13 +766,32 @@ class BrickGroup {
         this.score = 0;
         this.pos = new Vector(0, 2 * this.g.gridSize);
         this.startingScore = 0;
+        this.parseLayout(layout);
+        this.g.log(this.toString());
+    }
+
+    get size() {
+        return this.bricks.length;
+    }
+
+    parseLayout(layout) {
         if (Array.isArray(layout)) {
             // custom layouts
+
             for (let y = 0; y < layout.length; y++) {
                 for (let x = 0; x < layout[y].length; x++) {
                     let val = layout[y][x];
-                    if (val > 0) {
-                        this.add(new Brick(this.g, this.pos.x + x * 2 * g.gridSize, this.pos.y + y * g.gridSize, val));
+                    this.g.log(val);
+                    if (Math.abs(val) > 0) {
+                        let brX = this.pos.x + x * 2 * this.g.gridSize;
+                        let brY = this.pos.y + y * this.g.gridSize;
+                        let modVal = val % 1;
+                        if (Math.abs(modVal) >= 0.5) {
+                            this.g.log('plus half, modVal: ' + modVal);
+                            this.g.log(this.g.gridSize * (Math.abs(val) / val));
+                            brX += this.g.gridSize * (Math.abs(val) / val);
+                        }
+                        this.add(new Brick(this.g, brX, brY, Math.floor(Math.abs(val))));
                     }
                 }
             }
@@ -743,11 +801,6 @@ class BrickGroup {
                 this.add(new Brick(this.g, this.pos.x + (i % 9) * 2 * g.GRID_SIZE, this.pos.y + i + (i / 9) * g.GRID_SIZE));
             }
         }
-        this.g.log(this.toString());
-    }
-
-    get size() {
-        return this.bricks.length;
     }
 
     update() {
@@ -882,11 +935,11 @@ BrickGroup.layouts = {
         [0, 1, 1, 1, 1, 1, 1, 1, 0],
         [0, 1, 1, 3, 1, 3, 1, 1, 0],
         [0, 1, 1, 3, 2, 3, 1, 1, 0],
-        [0, 0, 1, 1, 2, 1, 1, 0, 0],
+        [0, 0, 1, 3, 2, 3, 1, 0, 0],
         [0, 0, 0, 2, 2, 2, 0, 0, 0],
+        [0, 0, 1, 2, 2, 2, 1, 0, 0],
         [0, 1, 1, 2, 2, 2, 1, 1, 0],
-        [0, 1, 1, 2, 2, 2, 1, 1, 0],
-        [0, 0, 0, 0, 2, 0, 0, 0, 0]
+        [0, 1.5, 0, 0, 2, 0, 0, -1.5, 0]
     ]
 };
 
