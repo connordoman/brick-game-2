@@ -7,10 +7,20 @@
  */
 const P5_LOCATION = 'https://connordoman.com/res/p5/p5.js';
 
-const DEBUG = true;
+const DEBUG = false;
 
 
 const BRICK_GAME = function (p) {
+
+    // Detect iOS low power mode
+    const videoElement = document.getElementById('detect_low_power_mode');
+    let lowPowerMode = false;
+    videoElement.addEventListener('suspend', () => {
+        lowPowerMode = true;
+    });
+    videoElement.addEventListener('play', () => {
+        lowPowerMode = false;
+    });
 
     p.preload = () => {
         this.font = p.loadFont('./res/fonts/press_start_2p.ttf');
@@ -23,7 +33,11 @@ const BRICK_GAME = function (p) {
         this.unitsY = 16;
 
         // p5 preparation
-        p.frameRate(60);
+        if (lowPowerMode) {
+            p.frameRate(30);
+        } else {
+            p.frameRate(60);
+        }
         let cnv = p.createCanvas(2 * this.unitsX * this.gridSize, 2 * this.unitsY * this.gridSize);
         cnv.parent('gamearea');
         p.textFont(this.font);
@@ -737,7 +751,7 @@ class Brick extends Rectangle {
             if (this.type === Brick.types.special) {
                 this.g.score += 10;
             }
-            window.setTimeout(this.destroyed = true, 100);
+            this.destroyed = true;
             if (this.g.score % 100 === 0) {
                 this.g.lives++;
             }
